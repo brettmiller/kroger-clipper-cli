@@ -72,6 +72,35 @@ def test_paces_between_coupons_but_not_before_the_first():
     assert all(coupons.DELAY_RANGE_S[0] <= s <= coupons.DELAY_RANGE_S[1] for s in clock.slept)
 
 
+def test_delay_range_is_configurable():
+    clock = Clock()
+    coupons.clip_all(
+        StubHttp([ok(), ok(), ok()]),
+        "kroger.com",
+        items(3),
+        delay_range=(0.05, 0.06),
+        sleep=clock,
+    )
+
+    assert all(0.05 <= s <= 0.06 for s in clock.slept)
+
+
+@pytest.mark.parametrize("bad", [(-1, 1), (1.0, 0.5)])
+def test_nonsense_delay_ranges_are_rejected(bad):
+    with pytest.raises(ValueError, match="invalid delay range"):
+        coupons.clip_all(StubHttp([ok()]), "kroger.com", items(1), delay_range=bad, sleep=Clock())
+
+
+def test_a_zero_delay_is_allowed_but_not_the_default():
+    clock = Clock()
+    coupons.clip_all(
+        StubHttp([ok(), ok()]), "kroger.com", items(2), delay_range=(0, 0), sleep=clock
+    )
+
+    assert clock.slept == [0]
+    assert coupons.DELAY_RANGE_S[1] > 0
+
+
 def test_individual_failure_is_survivable_and_recorded():
     http = StubHttp([ok(), fail(), ok()])
     result = coupons.clip_all(http, "kroger.com", items(3), sleep=Clock())

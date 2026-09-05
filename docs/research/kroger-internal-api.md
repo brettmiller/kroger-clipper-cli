@@ -184,9 +184,19 @@ per-coupon failures.
 
 ## Akamai tolerated a full run
 
-252 sequential clip POSTs at 0.3-1.0s randomised spacing produced no 429 and no
-denial. That is one data point, not a guarantee, and it does not license
+252 sequential clip POSTs at **0.3-1.0s** randomised spacing produced no 429 and
+no denial. That is one data point, not a guarantee, and it does not license
 removing the pacing.
+
+The default was subsequently lowered to **0.2-0.7s**, which has *not* been
+exercised over a full run - the card filled at 250 before it could be. Treat the
+faster rate as untested until a full run completes at it.
+
+Timing, measured from the 2026-09-05 run: each iteration took roughly 1.0-1.25s,
+of which only ~0.65s was the deliberate pause. The POST round-trip is ~0.6s, so
+the floor for a 250-coupon run is around 2.5 minutes even with no pacing at all.
+Concurrency would beat that and is deliberately not used: parallel POSTs are the
+traffic shape bot detection looks for.
 
 ## Open questions requiring an authenticated session
 

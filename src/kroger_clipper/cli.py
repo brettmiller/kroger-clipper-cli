@@ -65,8 +65,23 @@ def login(banner: str) -> None:
 )
 @click.option("--dry-run", is_flag=True, help="Enumerate unclipped coupons; clip nothing.")
 @click.option("--max-clips", type=int, default=None, help="Stop after this many coupons.")
+@click.option(
+    "--delay",
+    nargs=2,
+    type=float,
+    default=coupons.DELAY_RANGE_S,
+    show_default=True,
+    metavar="MIN MAX",
+    help="Seconds to pause between clips, chosen at random in this range.",
+)
 @click.option("--json", "as_json", is_flag=True, help="Machine-readable output on stdout.")
-def clip(banner: str, dry_run: bool, max_clips: int | None, as_json: bool) -> None:
+def clip(
+    banner: str,
+    dry_run: bool,
+    max_clips: int | None,
+    delay: tuple[float, float],
+    as_json: bool,
+) -> None:
     """Clip every unclipped digital coupon."""
     try:
         http = transport.build(banner)
@@ -100,8 +115,16 @@ def clip(banner: str, dry_run: bool, max_clips: int | None, as_json: bool) -> No
     click.echo(f"Clipping {target} of {len(found)} unclipped coupon(s)...", err=True)
     try:
         result = coupons.clip_all(
-            http, banner, found, limit=max_clips, on_result=None if as_json else report
+            http,
+            banner,
+            found,
+            limit=max_clips,
+            delay_range=delay,
+            on_result=None if as_json else report,
         )
+    except ValueError as exc:
+        click.echo(str(exc), err=True)
+        sys.exit(EXIT_STRUCTURAL)
     except errors.Blocked as exc:
         click.echo(f"Kroger refused the request: {exc}. Stopping.", err=True)
         sys.exit(EXIT_BLOCKED)

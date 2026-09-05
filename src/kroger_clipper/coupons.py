@@ -70,9 +70,10 @@ def describe(coupon: dict) -> str:
 
 
 # Clipping is one POST per coupon; there is no batch endpoint. Pacing is not
-# throttling for its own sake - a few hundred milliseconds between requests
-# costs nothing on a weekly run and keeps the traffic shape unremarkable.
-DELAY_RANGE_S = (0.3, 1.0)
+# throttling for its own sake - it keeps the traffic shape unremarkable. The
+# request round-trip is itself ~0.6s, so shaving the delay buys less than it
+# looks: the floor for a full card is a couple of minutes either way.
+DELAY_RANGE_S = (0.2, 0.7)
 
 # Individual coupons fail for their own reasons; five in a row is not
 # coincidence, it means something systemic broke and the rest are futile.
@@ -86,8 +87,21 @@ RETRY_BACKOFF_S = (5, 15, 45, 120)
 CARD_FULL_CODE = "TooManyCouponsOnCard"
 
 
-def clip_all(http, banner: str, items, *, limit=None, sleep=time.sleep, on_result=None) -> dict:
+def clip_all(
+    http,
+    banner: str,
+    items,
+    *,
+    limit=None,
+    delay_range=DELAY_RANGE_S,
+    sleep=time.sleep,
+    on_result=None,
+) -> dict:
     """Clip each coupon in turn, pacing between them and stopping on systemic failure."""
+    low, high = delay_range
+    if low < 0 or high < low:
+        raise ValueError(f"invalid delay range: {delay_range}")
+
     url = f"https://www.{banner}{CLIP_PATH}"
     targets = list(items)[:limit] if limit else list(items)
 
@@ -97,7 +111,7 @@ def clip_all(http, banner: str, items, *, limit=None, sleep=time.sleep, on_resul
 
     for index, coupon in enumerate(targets):
         if index:
-            sleep(random.uniform(*DELAY_RANGE_S))
+            sleep(random.uniform(low, high))
 
         outcome = _clip_one(http, url, coupon, sleep)
 
