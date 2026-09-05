@@ -26,6 +26,16 @@ cd kroger-clipper
 uv sync
 ```
 
+Optionally put it on your `PATH` — the launcher resolves its own symlink, so it
+works from anywhere:
+
+```sh
+ln -s "$PWD/kroger-clipper" ~/.local/bin/kroger-clipper
+```
+
+The examples below use `uv run kroger-clipper`; with the symlink in place, plain
+`kroger-clipper` works identically from any directory.
+
 ## Use
 
 Sign in once. A real Chrome window opens; sign in by hand and leave it alone.
