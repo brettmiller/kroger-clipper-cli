@@ -5,6 +5,7 @@ description = "Clip Kroger digital coupons from the command line"
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.1",
+    "curl-cffi>=0.16.3",
     "playwright>=1.49",
 ]
 

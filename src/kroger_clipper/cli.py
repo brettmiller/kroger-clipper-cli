@@ -1,7 +1,9 @@
+import json
 import sys
 
 import click
 
+from . import coupons, errors, transport
 from . import session as session_mod
 
 EXIT_SESSION_EXPIRED = 2
@@ -55,3 +57,47 @@ def login(banner: str) -> None:
             detail = probe.get("error")
         click.echo(f"  response: {detail if detail else '(empty body)'}", err=True)
         click.echo("  (session is saved; the API call itself did not succeed)", err=True)
+
+
+@main.command()
+@click.option(
+    "--banner", default="kroger.com", show_default=True, help="Kroger-owned banner domain."
+)
+@click.option("--dry-run", is_flag=True, help="Enumerate unclipped coupons; clip nothing.")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output on stdout.")
+def clip(banner: str, dry_run: bool, as_json: bool) -> None:
+    """Clip every unclipped digital coupon."""
+    if not dry_run:
+        click.echo("Clipping is not implemented yet. Re-run with --dry-run.", err=True)
+        sys.exit(EXIT_STRUCTURAL)
+
+    try:
+        http = transport.build(banner)
+        found = coupons.list_unclipped(http, banner)
+    except errors.SessionMissing as exc:
+        click.echo(f"{exc}. Run `kroger-clipper login`.", err=True)
+        sys.exit(EXIT_SESSION_EXPIRED)
+    except errors.Blocked as exc:
+        click.echo(f"Kroger refused the request: {exc}. Wait before retrying.", err=True)
+        sys.exit(EXIT_BLOCKED)
+    except errors.StructuralError as exc:
+        click.echo(f"The API did not look as expected: {exc}", err=True)
+        sys.exit(EXIT_STRUCTURAL)
+
+    if as_json:
+        click.echo(json.dumps([_summarise(c) for c in found], indent=2))
+        return
+
+    click.echo(f"{len(found)} unclipped coupon(s)")
+    for coupon in found:
+        click.echo(f"  {coupons.describe(coupon)}")
+
+
+def _summarise(coupon: dict) -> dict:
+    return {
+        "id": coupon.get("id"),
+        "krogerCouponNumber": coupon.get("krogerCouponNumber"),
+        "brand": coupon.get("brandName") or coupon.get("brand"),
+        "description": coupon.get("shortDescription") or coupon.get("title"),
+        "expirationDate": coupon.get("expirationDate"),
+    }

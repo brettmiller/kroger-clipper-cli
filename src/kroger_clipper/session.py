@@ -12,6 +12,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 from . import paths
+from .errors import Blocked, ChromeNotFound, SessionMissing, SignInAbandoned
 
 SIGNIN_TIMEOUT_S = 300
 POLL_INTERVAL_S = 2
@@ -46,22 +47,6 @@ _CHROME_CANDIDATES = (
     "google-chrome",
     "google-chrome-stable",
 )
-
-
-class SessionMissing(Exception):
-    pass
-
-
-class SignInAbandoned(Exception):
-    pass
-
-
-class ChromeNotFound(Exception):
-    pass
-
-
-class Blocked(Exception):
-    pass
 
 
 def login(banner: str) -> dict:
