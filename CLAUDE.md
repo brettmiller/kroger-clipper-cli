@@ -29,6 +29,9 @@ clip.**
   missing expected fields, zero coupons found where the account should have many.
 - Five consecutive clip failures aborts the run. That is not throttling; it means
   something systemic broke and the remaining requests are useless.
+- A full card (`TooManyCouponsOnCard`, HTTP 422) ends the run normally with exit
+  0. It is a terminal condition, not an error, and it stops on the first
+  rejection because every subsequent clip is guaranteed to fail.
 - HTTP 429 is honored, not worked around: exponential backoff and retry. Never
   continue issuing requests through explicit backpressure.
 

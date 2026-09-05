@@ -162,6 +162,32 @@ any committed fixture.
   returned 263. `filter.status=unclipped` excludes them, so repeat runs are
   naturally idempotent and cost no wasted POSTs.
 
+## The card limit is 250 coupons
+
+Observed directly. After 3 coupons were clipped in a bounded test, a full run
+clipped 247 more and then began rejecting — 250 exactly. The rejection is:
+
+```
+HTTP 422
+{"errors":{"reason":"This card already been loaded with maximum number of coupons.",
+           "code":"TooManyCouponsOnCard","statusCode":422,
+           "datetime":{"value":"...","timezone":"UTC"}}}
+```
+
+Note that 250 is the same number one third-party clipper uses as a self-imposed
+cap; it appears to be Kroger's real limit rather than that author's invention.
+
+This is a **normal terminal condition**, not a fault. Once it is returned, every
+further clip fails, so the run stops on the first one and exits 0. Only the
+`TooManyCouponsOnCard` code is treated this way — other HTTP 422s remain ordinary
+per-coupon failures.
+
+## Akamai tolerated a full run
+
+252 sequential clip POSTs at 0.3-1.0s randomised spacing produced no 429 and no
+denial. That is one data point, not a guarantee, and it does not license
+removing the pacing.
+
 ## Open questions requiring an authenticated session
 
 - Name of the actual session cookie.

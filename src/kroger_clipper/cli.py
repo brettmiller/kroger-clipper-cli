@@ -110,6 +110,8 @@ def clip(banner: str, dry_run: bool, max_clips: int | None, as_json: bool) -> No
         click.echo(json.dumps(result, indent=2))
     else:
         click.echo(f"Clipped {result['clipped']} of {result['attempted']} attempted.")
+        if result["card_full"]:
+            click.echo("Card is full — Kroger's per-card coupon limit was reached.")
         if result["failures"]:
             click.echo(f"{len(result['failures'])} failed.", err=True)
 

@@ -80,6 +80,11 @@ MAX_CONSECUTIVE_FAILURES = 5
 
 RETRY_BACKOFF_S = (5, 15, 45, 120)
 
+# Kroger caps how many coupons a card may hold (observed: 250). Reaching it is a
+# normal end to a run, not a fault - and once it is reached every further clip is
+# guaranteed to fail, so stop on the first one rather than proving it five times.
+CARD_FULL_CODE = "TooManyCouponsOnCard"
+
 
 def clip_all(http, banner: str, items, *, limit=None, sleep=time.sleep, on_result=None) -> dict:
     """Clip each coupon in turn, pacing between them and stopping on systemic failure."""
@@ -95,6 +100,16 @@ def clip_all(http, banner: str, items, *, limit=None, sleep=time.sleep, on_resul
             sleep(random.uniform(*DELAY_RANGE_S))
 
         outcome = _clip_one(http, url, coupon, sleep)
+
+        if _card_full(outcome):
+            return {
+                "clipped": clipped,
+                "failures": failures,
+                "attempted": index + 1,
+                "stopped": None,
+                "card_full": True,
+            }
+
         if on_result:
             on_result(outcome)
 
@@ -111,9 +126,20 @@ def clip_all(http, banner: str, items, *, limit=None, sleep=time.sleep, on_resul
                 "failures": failures,
                 "attempted": index + 1,
                 "stopped": f"{consecutive} consecutive failures",
+                "card_full": False,
             }
 
-    return {"clipped": clipped, "failures": failures, "attempted": len(targets), "stopped": None}
+    return {
+        "clipped": clipped,
+        "failures": failures,
+        "attempted": len(targets),
+        "stopped": None,
+        "card_full": False,
+    }
+
+
+def _card_full(outcome: dict) -> bool:
+    return outcome["status"] == 422 and CARD_FULL_CODE in (outcome["body"] or "")
 
 
 def _clip_one(http, url: str, coupon, sleep) -> dict:

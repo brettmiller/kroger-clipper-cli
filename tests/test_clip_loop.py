@@ -32,6 +32,16 @@ def fail(status=400):
     return StubResponse(status_code=status, text='{"error":"nope"}')
 
 
+CARD_FULL_BODY = (
+    '{"errors":{"reason":"This card already been loaded with maximum number of coupons.",'
+    '"code":"TooManyCouponsOnCard","statusCode":422}}'
+)
+
+
+def card_full():
+    return StubResponse(status_code=422, text=CARD_FULL_BODY)
+
+
 def items(count):
     return [{"id": f"c{i}"} for i in range(count)]
 
@@ -131,3 +141,40 @@ def test_on_result_sees_every_outcome():
     coupons.clip_all(http, "kroger.com", items(2), sleep=Clock(), on_result=seen.append)
 
     assert [o["ok"] for o in seen] == [True, False]
+
+
+def test_card_full_stops_on_the_first_rejection():
+    """Once the card is full every further clip fails; proving it five times is waste."""
+    http = StubHttp([ok(), ok(), card_full()])
+    result = coupons.clip_all(http, "kroger.com", items(50), sleep=Clock())
+
+    assert result["clipped"] == 2
+    assert result["card_full"] is True
+    assert len(http.posts) == 3
+
+
+def test_card_full_is_not_an_error_condition():
+    http = StubHttp([ok(), card_full()])
+    result = coupons.clip_all(http, "kroger.com", items(10), sleep=Clock())
+
+    # A full card ended the run normally: no failures recorded, no abort reason.
+    assert result["failures"] == []
+    assert result["stopped"] is None
+
+
+def test_a_plain_422_is_still_a_normal_failure():
+    """Only the documented card-full code is special; other 422s are just failures."""
+    http = StubHttp([StubResponse(status_code=422, text='{"errors":{"code":"Whatever"}}'), ok()])
+    result = coupons.clip_all(http, "kroger.com", items(2), sleep=Clock())
+
+    assert result["card_full"] is False
+    assert len(result["failures"]) == 1
+    assert result["clipped"] == 1
+
+
+def test_consecutive_failure_abort_reports_card_full_false():
+    http = StubHttp([fail() for _ in range(5)])
+    result = coupons.clip_all(http, "kroger.com", items(20), sleep=Clock())
+
+    assert result["card_full"] is False
+    assert "consecutive" in result["stopped"]
