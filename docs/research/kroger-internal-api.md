@@ -90,6 +90,66 @@ Coupon availability is store-dependent. The enumerate endpoint returns HTTP 500
 for a category unavailable at the active store. The current store is resolvable
 at runtime from the modality preferences endpoint, so it need not be configured.
 
+## Confirmed by a real sign-in (2026-09-05)
+
+A successful `login` against a live account captured 49 cookies and settled
+several of the questions below.
+
+- **`/accountmanagement/api/profile` is dead** — it returns HTTP 404. Inherited
+  from the older kroger-cli; do not use it as an auth check.
+- **There is no `KRGRHH` cookie.** The name appears in web-search summaries with
+  no primary source. It was not present in the real jar. Treat it as fabricated.
+- **Session-identity candidates**: `kroger-si-customer-data-token`, `loggedIn`,
+  `JSESSIONID`, plus the Azure B2C pair `x-ms-cpim-sso:eciamp.onmicrosoft.com_0`
+  and `x-ms-cpim-csrf`.
+- **Akamai set present as documented**: `_abck`, `ak_bmsc`, `bm_sz`, `bm_s`,
+  `bm_so`, `bm_sv`, `bm_sc`, `bm_lso`, `AKA_A2`.
+- **Dynatrace cookies carry a per-install suffix** (`dtCookieg9i8dbl7`,
+  `rxVisitorg9i8dbl7`, …), so never match these by exact name.
+- **Store context is partly in cookies**: `DD_modStore`, `DivisionID`,
+  `StoreCode`. Worth checking whether these remove the need to call the modality
+  endpoint before enumerating.
+- **Akamai rate-limits by IP**, returning a JSON body with `message: "Too many
+  requests"` and the caller's IP. Six browser sessions within a few minutes was
+  enough to trigger it. It cleared without intervention.
+
+## Ground truth: the request the SPA actually makes
+
+Observed by attaching to a real signed-in browser and watching the coupons page
+issue its own call. Returned HTTP 200.
+
+```
+GET /atlas/v1/savings-coupons/v1/coupons
+    ?projections=coupons.compact
+    &filter.status=unclipped&filter.status=active
+    &page.size=24&page.offset=0
+```
+
+Headers that matter (cookies omitted):
+
+| Header | Example |
+| --- | --- |
+| `x-facility-id` | `09900999` (synthetic; the real value is store-identifying) |
+| `x-modality-type` | `IN_STORE` |
+| `x-modality` | `{"type":"IN_STORE","locationId":"09900999"}` |
+| `x-laf-object` | JSON array with `modality`, `handoffLocation.storeId`/`facilityId`, and the store's postal address |
+| `x-kroger-channel` | `WEB` |
+| `referer` | `https://www.kroger.com/savings/cl/coupons/` |
+
+`filter.status` is repeated, not comma-joined. `page.offset` is sent explicitly.
+A request omitting the store headers and `page.offset` returns **HTTP 400 with an
+empty body** — a malformed-request signal, not an auth failure.
+
+Also present but treated as telemetry and deliberately not replayed:
+`traceparent`, `tracestate`, `x-dtpc`, `x-ab-test`, `x-call-origin`,
+`user-time-zone`, and the `sec-ch-*` client hints.
+
+Because the browser already assembles `x-laf-object`, `login` captures these
+headers from a real request rather than rebuilding them from the modality
+endpoint. `x-laf-object` contains the store's street address, so it is
+PII-adjacent: it lives in the mode-0600 session file and must be scrubbed from
+any committed fixture.
+
 ## Open questions requiring an authenticated session
 
 - Name of the actual session cookie.
