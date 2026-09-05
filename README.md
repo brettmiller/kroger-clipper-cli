@@ -23,35 +23,32 @@ your card before you get to the store.
 ```sh
 git clone git@github.com:brettmiller/kroger-clipper.git
 cd kroger-clipper
-uv sync
+uv tool install --editable .
 ```
 
-Optionally put it on your `PATH` — the launcher resolves its own symlink, so it
-works from anywhere:
+That puts `kroger-clipper` on your `PATH` and, because the install is editable,
+it keeps running whatever is in the working tree — no reinstall after a change.
+Remove it with `uv tool uninstall kroger-clipper`.
 
-```sh
-ln -s "$PWD/kroger-clipper" ~/.local/bin/kroger-clipper
-```
-
-The examples below use `uv run kroger-clipper`; with the symlink in place, plain
-`kroger-clipper` works identically from any directory.
+To run it without installing anything, `uv sync` and then prefix the commands
+below with `uv run`.
 
 ## Use
 
 Sign in once. A real Chrome window opens; sign in by hand and leave it alone.
 
 ```sh
-uv run kroger-clipper login
+kroger-clipper login
 ```
 
 Then clip:
 
 ```sh
-uv run kroger-clipper clip                  # clip everything unclipped
-uv run kroger-clipper clip --dry-run        # list what would be clipped, clip nothing
-uv run kroger-clipper clip --max-clips 20   # stop after 20
-uv run kroger-clipper clip --json           # machine-readable summary
-uv run kroger-clipper clip --delay 0.2 0.5  # seconds between clips (default 0.2 0.7)
+kroger-clipper clip                  # clip everything unclipped
+kroger-clipper clip --dry-run        # list what would be clipped, clip nothing
+kroger-clipper clip --max-clips 20   # stop after 20
+kroger-clipper clip --json           # machine-readable summary
+kroger-clipper clip --delay 0.2 0.5  # seconds between clips (default 0.2 0.7)
 ```
 
 `--banner` targets another Kroger-owned chain (`--banner frysfood.com`). Only
