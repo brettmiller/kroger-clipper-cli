@@ -12,7 +12,41 @@ EXIT_STRUCTURAL = 3
 EXIT_BLOCKED = 4
 
 
-@click.group()
+class DetailedGroup(click.Group):
+    """Show each subcommand's own options in the top-level help.
+
+    Click lists only names and one-line summaries, so finding --dry-run or
+    --max-clips takes a second command. There are two subcommands; showing them
+    in full costs a dozen lines and saves the round trip.
+    """
+
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        super().format_help(ctx, formatter)
+        for name in self.list_commands(ctx):
+            command = self.get_command(ctx, name)
+            if command is None or command.hidden:
+                continue
+            self._format_subcommand(ctx, formatter, name, command)
+
+    @staticmethod
+    def _format_subcommand(ctx, formatter, name, command) -> None:
+        sub_ctx = click.Context(command, info_name=name, parent=ctx)
+        # Filter on the visible flag, not the param name: click names its help
+        # option inconsistently across versions ("_click_default_help" in 8.5).
+        rows = [
+            record
+            for param in command.get_params(sub_ctx)
+            if (record := param.get_help_record(sub_ctx)) and record[0] != "--help"
+        ]
+        with formatter.section(f"{ctx.info_name} {name}"):
+            if command.help:
+                formatter.write_text(command.help.strip().splitlines()[0])
+                formatter.write_paragraph()
+            if rows:
+                formatter.write_dl(rows)
+
+
+@click.group(cls=DetailedGroup)
 @click.version_option()
 def main() -> None:
     """Clip Kroger digital coupons from the command line."""

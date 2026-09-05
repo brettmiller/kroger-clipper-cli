@@ -163,3 +163,44 @@ def test_max_clips_is_passed_through(runner, no_network, monkeypatch):
     runner.invoke(cli.main, ["clip", "--max-clips", "3"])
 
     assert seen["limit"] == 3
+
+
+def test_top_level_help_shows_subcommand_options(runner):
+    """Finding --dry-run should not require a second command."""
+    out = runner.invoke(cli.main, ["--help"], prog_name="kroger-clipper").output
+
+    assert "--dry-run" in out
+    assert "--max-clips" in out
+    assert "--delay" in out
+    assert "kroger-clipper clip" in out
+    assert "kroger-clipper login" in out
+
+
+def test_bare_invocation_shows_the_same_help(runner):
+    bare = runner.invoke(cli.main, [], prog_name="kroger-clipper").output
+    explicit = runner.invoke(cli.main, ["--help"], prog_name="kroger-clipper").output
+    assert bare == explicit
+
+
+def test_hidden_commands_stay_hidden(runner):
+    """capture is a maintenance tool, not part of the advertised interface.
+
+    Matched on the section heading, not the bare word: login's own summary
+    contains "capture the session".
+    """
+    out = runner.invoke(cli.main, ["--help"], prog_name="kroger-clipper").output
+
+    assert "kroger-clipper capture" not in out
+    assert "Record a real response" not in out
+
+
+def test_help_is_not_repeated_for_every_subcommand(runner):
+    """--help belongs in the top Options block once, not in each expansion."""
+    out = runner.invoke(cli.main, ["--help"], prog_name="kroger-clipper").output
+    assert out.count("Show this message and exit.") == 1
+
+
+def test_subcommand_help_still_works_on_its_own(runner):
+    out = runner.invoke(cli.main, ["clip", "--help"]).output
+    assert "--dry-run" in out
+    assert "Show this message and exit." in out
