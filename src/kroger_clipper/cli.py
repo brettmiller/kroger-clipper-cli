@@ -1,9 +1,10 @@
 import json
 import sys
+from pathlib import Path
 
 import click
 
-from . import coupons, errors, transport
+from . import coupons, errors, scrub, transport
 from . import session as session_mod
 
 EXIT_SESSION_EXPIRED = 2
@@ -50,7 +51,9 @@ def login(banner: str) -> None:
 
     click.echo(f"Store headers captured: {', '.join(result['context_headers'])}")
     probe = result["probe"]
-    click.echo(f"Coupons API probe: HTTP {probe['status']}")
+    # Enumeration works without cookies, so this proves the store headers work,
+    # not that we are signed in. Authentication only shows up at clip time.
+    click.echo(f"Coupons API probe: HTTP {probe['status']} (store headers, not auth)")
     if not probe.get("ok"):
         detail = probe.get("snippet")
         if detail is None:
@@ -86,7 +89,7 @@ def clip(
     try:
         http = transport.build(banner)
         found = coupons.list_unclipped(http, banner)
-    except errors.SessionMissing as exc:
+    except (errors.SessionMissing, errors.SessionExpired) as exc:
         click.echo(f"{exc}. Run `kroger-clipper login`.", err=True)
         sys.exit(EXIT_SESSION_EXPIRED)
     except errors.Blocked as exc:
@@ -105,13 +108,21 @@ def clip(
             click.echo(f"  {coupons.describe(coupon)}")
         return
 
+    target = min(len(found), max_clips) if max_clips else len(found)
+    show_progress = sys.stderr.isatty() and not as_json
+    seen = 0
+
     def report(outcome: dict) -> None:
+        nonlocal seen
+        seen += 1
         if not outcome["ok"]:
             click.echo(
                 f"  failed {outcome['id']}: HTTP {outcome['status']} {outcome['body']}", err=True
             )
+        elif show_progress:
+            # Carriage return, no newline: one live line rather than 250 of scroll.
+            click.echo(f"  {seen}/{target} clipped\r", nl=False, err=True)
 
-    target = min(len(found), max_clips) if max_clips else len(found)
     click.echo(f"Clipping {target} of {len(found)} unclipped coupon(s)...", err=True)
     try:
         result = coupons.clip_all(
@@ -125,14 +136,22 @@ def clip(
     except ValueError as exc:
         click.echo(str(exc), err=True)
         sys.exit(EXIT_STRUCTURAL)
+    except errors.SessionExpired as exc:
+        click.echo(f"{exc}. Run `kroger-clipper login`.", err=True)
+        sys.exit(EXIT_SESSION_EXPIRED)
     except errors.Blocked as exc:
         click.echo(f"Kroger refused the request: {exc}. Stopping.", err=True)
         sys.exit(EXIT_BLOCKED)
+
+    if show_progress:
+        click.echo(" " * 40 + "\r", nl=False, err=True)
 
     if as_json:
         click.echo(json.dumps(result, indent=2))
     else:
         click.echo(f"Clipped {result['clipped']} of {result['attempted']} attempted.")
+        if result["already_clipped"]:
+            click.echo(f"{result['already_clipped']} were already on the card.")
         if result["card_full"]:
             click.echo("Card is full — Kroger's per-card coupon limit was reached.")
         if result["failures"]:
@@ -151,3 +170,39 @@ def _summarise(coupon: dict) -> dict:
         "description": coupon.get("shortDescription") or coupon.get("title"),
         "expirationDate": coupon.get("expirationDate"),
     }
+
+
+@main.command(hidden=True)
+@click.option(
+    "--banner", default="kroger.com", show_default=True, help="Kroger-owned banner domain."
+)
+@click.option("--size", default=5, show_default=True, help="Coupons to capture.")
+def capture(banner: str, size: int) -> None:
+    """Record a real response as a scrubbed test fixture."""
+    root = Path(__file__).resolve().parents[2]
+    raw_path = root / "tests" / "captures" / "coupons_page.json"
+    fixture_path = root / "tests" / "fixtures" / "coupons_page.json"
+
+    try:
+        http = transport.build(banner)
+        payload = coupons.fetch_page(http, banner, offset=0, size=size)
+    except (errors.SessionMissing, errors.SessionExpired) as exc:
+        click.echo(f"{exc}. Run `kroger-clipper login`.", err=True)
+        sys.exit(EXIT_SESSION_EXPIRED)
+    except errors.Blocked as exc:
+        click.echo(f"Kroger refused the request: {exc}. Wait before retrying.", err=True)
+        sys.exit(EXIT_BLOCKED)
+
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_path.write_text(json.dumps(payload, indent=2))
+
+    try:
+        scrubbed = scrub.scrub_payload(payload)
+    except scrub.UnknownField as exc:
+        click.echo(f"Refusing to write a fixture: {exc}", err=True)
+        click.echo(f"The raw capture is at {raw_path} (gitignored).", err=True)
+        sys.exit(EXIT_STRUCTURAL)
+
+    fixture_path.parent.mkdir(parents=True, exist_ok=True)
+    fixture_path.write_text(json.dumps(scrubbed, indent=2, sort_keys=True) + "\n")
+    click.echo(f"Wrote {fixture_path} ({len(scrubbed['data']['coupons'])} coupons)")

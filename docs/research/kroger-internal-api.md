@@ -198,6 +198,28 @@ the floor for a 250-coupon run is around 2.5 minutes even with no pacing at all.
 Concurrency would beat that and is deliberately not used: parallel POSTs are the
 traffic shape bot detection looks for.
 
+## Auth boundaries, measured
+
+- **Enumeration is anonymous.** `GET .../coupons` returns HTTP 200 with full
+  coupon data and *no cookies at all*. Listing is therefore useless as an
+  authentication check — a green enumerate says the store headers are right, not
+  that you are signed in.
+- **Clipping is the real auth boundary.** An unauthenticated `clip-unclip`
+  returns:
+  ```
+  HTTP 401 {"errors":{"reason":"The request must be authenticated","code":"AUTH_REQUIRED"}}
+  ```
+  This is how an expired session shows up, and it is what maps to exit code 2.
+- **Already-clipped returns HTTP 422 `CouponAlreadyAdded`.** Importantly this was
+  observed for a coupon that `filter.status=unclipped` had just returned, so that
+  filter can be stale. Treat already-added as an expected, benign outcome; if it
+  were counted as a failure, stale enumeration data could trip the
+  consecutive-failure abort on a perfectly healthy run.
+- **The rate-limit body is a challenge document**, served by `AkamaiGHost`:
+  ```
+  HTTP 429 {"cpr_chlge":"true","t":"291758601"}
+  ```
+
 ## Open questions requiring an authenticated session
 
 - Name of the actual session cookie.

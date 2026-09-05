@@ -111,7 +111,7 @@ dropped at the Akamai edge before any HTTP status comes back.
 ## Development
 
 ```sh
-uv run pytest        # 50 tests, offline, no account needed
+uv run pytest        # offline, no account needed
 uv run ruff check .
 uv run ruff format .
 ```

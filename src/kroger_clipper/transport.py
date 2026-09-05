@@ -1,7 +1,7 @@
 from curl_cffi import requests
 
 from . import session
-from .errors import Blocked, StructuralError
+from .errors import Blocked, SessionExpired, StructuralError
 
 # A stock Python TLS fingerprint is dropped at the Akamai edge before any HTTP
 # status comes back, so the client has to look like the browser we logged in
@@ -9,7 +9,13 @@ from .errors import Blocked, StructuralError
 IMPERSONATE = "chrome"
 TIMEOUT_S = 30
 
-_BLOCK_MARKERS = ("Too many requests", "Access Denied", "edgesuite")
+# cpr_chlge is Akamai's rate-limit challenge body. It arrives with a 429 today,
+# but matching the body too costs nothing if that ever changes.
+_BLOCK_MARKERS = ("Too many requests", "Access Denied", "edgesuite", "cpr_chlge")
+
+# Observed: an unauthenticated clip returns 401 with this code. Enumeration is
+# anonymous, so this is the only place a dead session actually shows up.
+AUTH_REQUIRED_CODE = "AUTH_REQUIRED"
 
 
 def build(banner: str) -> requests.Session:
@@ -35,6 +41,12 @@ def build(banner: str) -> requests.Session:
         }
     )
     return http
+
+
+def raise_for_auth(resp) -> None:
+    """A stale session is a routine re-login, not a structural surprise."""
+    if resp.status_code == 401 or AUTH_REQUIRED_CODE in (resp.text or "")[:500]:
+        raise SessionExpired("Kroger rejected the session")
 
 
 def rate_limited(resp) -> bool:

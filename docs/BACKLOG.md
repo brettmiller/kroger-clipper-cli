@@ -4,73 +4,31 @@ State as of 2026-09-05. The tool works end to end: `login` captures a session,
 `clip` enumerated 266 coupons and clipped 250 before hitting Kroger's per-card
 limit. What follows is what is knowingly incomplete.
 
+Fixed since the first draft: the unreachable exit code 2, missing progress
+output, the untested `transport.build()`, the absent CLI tests, and the dead
+`paths.config_dir()`. The fixture scrubber now exists; only the capture itself is
+outstanding.
+
 Ordered by what would bite first.
 
-## Defects
+## Open
 
-### Exit code 2 is unreachable for an expired session
+### No real captured fixture yet
 
-`CLAUDE.md` documents exit 2 as "session expired — run `login` again", but
-nothing produces it in that case. `SessionMissing` is raised only when the
-session *file is absent*. An expired session — file present, cookies stale —
-reaches `coupons._fetch`, returns a non-200, and becomes a `StructuralError`,
-which exits 3. So a routine re-auth is indistinguishable from "Kroger changed
-their API", which is precisely the confusion the exit codes exist to prevent.
+The scrubber and a hidden `capture` command exist and are tested, but no real
+response has been recorded — the account was rate limited when the work was done.
+When it clears:
 
-Fixing it needs an observation first: nobody has seen what this API returns for a
-stale session. It could be 401, 403, or a 200 carrying an HTML sign-in page. Once
-known, map it to `SessionMissing` (or a new `SessionExpired`) in `transport` so
-both `clip` paths inherit it.
+```sh
+kroger-clipper capture
+```
 
-### A long run gives no progress output
-
-Successful clips print nothing, so a 250-coupon run emits one line and then goes
-quiet for four minutes. There is no way to tell working from hung. Failures
-print immediately, so the silence is *technically* informative, but it is a mild
-version of the sin this project was built to avoid.
-
-Print a counter when stdout is a TTY; stay silent when it is not, per the output
-contract.
-
-## Testing gaps
-
-### The fixture scrubber does not exist
-
-This is the largest gap against what was agreed. All 50 tests run against
-hand-written stubs, so nothing pins parsing to a *real* Kroger payload — a change
-in their response shape would not fail a single test.
-
-What was agreed (see the Q11/Q16 decisions):
-
-- A capture mode that records real responses.
-- A scrubber that **allowlists** fields: it keeps only what it recognises and
-  refuses to write a fixture containing an unrecognised field. A denylist would
-  leak the first new field Kroger adds.
-- Tests for the scrubber itself, asserting both that known PII is removed *and*
-  that an unrecognised field fails closed.
-- Raw captures under `tests/captures/` (gitignored); scrubbed fixtures under
-  `tests/fixtures/` (committed).
-
-The scrubber must handle `x-laf-object`, which embeds the store's street address,
-and the facility id, which identifies where the account shops. Both are already
-excluded from the repo by hand; the scrubber should make that automatic.
-
-### `transport.build()` is untested
-
-Cookie loading, domain defaulting, and header merging have no coverage. It is
-also the one module where a mistake is silent — a dropped cookie looks like an
-auth failure, not a bug.
-
-### `paths.config_dir()` is dead code
-
-Nothing reads a configuration file; the function is exercised only by its own
-tests. Either add config-file support or delete it. It was briefly documented in
-`CLAUDE.md` as though it existed.
-
-### No CLI-level tests
-
-Exit codes and `--json` output shape are asserted nowhere, despite being the
-documented interface for scheduled use.
+That writes the raw response to `tests/captures/` (gitignored) and a scrubbed
+copy to `tests/fixtures/coupons_page.json` (committed). If Kroger has added a
+field the allowlist does not know, it will refuse to write the fixture and name
+the field — which is the design working, not a bug. Once the fixture exists, add
+a test that runs it through `list_unclipped`'s parsing so a response-shape change
+fails the suite.
 
 ## Unknowns needing observation
 

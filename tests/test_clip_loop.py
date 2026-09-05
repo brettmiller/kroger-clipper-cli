@@ -1,7 +1,7 @@
 import pytest
 
 from kroger_clipper import coupons
-from kroger_clipper.errors import Blocked
+from kroger_clipper.errors import Blocked, SessionExpired
 
 from .test_coupons import StubResponse
 
@@ -207,3 +207,42 @@ def test_consecutive_failure_abort_reports_card_full_false():
 
     assert result["card_full"] is False
     assert "consecutive" in result["stopped"]
+
+
+ALREADY_BODY = (
+    '{"errors":{"reason":"This coupon has already been added to your account.",'
+    '"code":"CouponAlreadyAdded","statusCode":422}}'
+)
+
+
+def already():
+    return StubResponse(status_code=422, text=ALREADY_BODY)
+
+
+def test_already_clipped_is_counted_separately_not_as_a_failure():
+    """filter.status=unclipped can return stale entries; that is not a fault."""
+    http = StubHttp([ok(), already(), ok()])
+    result = coupons.clip_all(http, "kroger.com", items(3), sleep=Clock())
+
+    assert result["clipped"] == 2
+    assert result["already_clipped"] == 1
+    assert result["failures"] == []
+    assert result["stopped"] is None
+
+
+def test_stale_enumeration_cannot_trip_the_consecutive_abort():
+    """Five already-clipped in a row must not look like five failures."""
+    http = StubHttp([already() for _ in range(6)] + [ok()])
+    result = coupons.clip_all(http, "kroger.com", items(7), sleep=Clock())
+
+    assert result["already_clipped"] == 6
+    assert result["clipped"] == 1
+    assert result["stopped"] is None
+
+
+def test_unauthenticated_clip_raises_session_expired():
+    body = '{"errors":{"reason":"The request must be authenticated","code":"AUTH_REQUIRED"}}'
+    http = StubHttp([StubResponse(status_code=401, text=body)])
+
+    with pytest.raises(SessionExpired):
+        coupons.clip_all(http, "kroger.com", items(3), sleep=Clock())

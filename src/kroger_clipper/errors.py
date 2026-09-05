@@ -14,6 +14,10 @@ class ChromeNotFound(KrogerClipperError):
     pass
 
 
+class SessionExpired(KrogerClipperError):
+    """A session exists on disk but Kroger no longer accepts it."""
+
+
 class Blocked(KrogerClipperError):
     """Kroger refused the request: rate limited, or Akamai denied it."""
 

@@ -9,10 +9,6 @@ def _xdg(var: str, fallback: str) -> Path:
     return Path(root) / APP
 
 
-def config_dir() -> Path:
-    return _xdg("XDG_CONFIG_HOME", ".config")
-
-
 def state_dir() -> Path:
     return _xdg("XDG_STATE_HOME", ".local/state")
 

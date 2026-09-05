@@ -27,13 +27,18 @@ def list_unclipped(http, banner: str) -> list[dict]:
     raise StructuralError(f"pagination did not terminate within {MAX_PAGES} pages")
 
 
-def _fetch(http, url: str, offset: int) -> dict:
+def fetch_page(http, banner: str, offset: int = 0, size: int = PAGE_SIZE) -> dict:
+    """One page of the enumerate endpoint, validated. Used by list_unclipped and capture."""
+    return _fetch(http, f"https://www.{banner}{API_PATH}", offset=offset, size=size)
+
+
+def _fetch(http, url: str, offset: int, size: int = PAGE_SIZE) -> dict:
     resp = http.get(
         url,
         params={
             "projections": "coupons.compact",
             "filter.status": "unclipped",
-            "page.size": PAGE_SIZE,
+            "page.size": size,
             "page.offset": offset,
         },
     )
@@ -86,6 +91,11 @@ RETRY_BACKOFF_S = (5, 15, 45, 120)
 # guaranteed to fail, so stop on the first one rather than proving it five times.
 CARD_FULL_CODE = "TooManyCouponsOnCard"
 
+# filter.status=unclipped can return coupons that are in fact already on the
+# card, so this is expected rather than exceptional. Counting it as a failure
+# would let stale enumeration data trip the consecutive-failure abort.
+ALREADY_ADDED_CODE = "CouponAlreadyAdded"
+
 
 def clip_all(
     http,
@@ -106,6 +116,7 @@ def clip_all(
     targets = list(items)[:limit] if limit else list(items)
 
     clipped = 0
+    already = 0
     failures: list[dict] = []
     consecutive = 0
 
@@ -115,14 +126,8 @@ def clip_all(
 
         outcome = _clip_one(http, url, coupon, sleep)
 
-        if _card_full(outcome):
-            return {
-                "clipped": clipped,
-                "failures": failures,
-                "attempted": index + 1,
-                "stopped": None,
-                "card_full": True,
-            }
+        if _has_code(outcome, CARD_FULL_CODE):
+            return _summary(clipped, already, failures, index + 1, None, card_full=True)
 
         if on_result:
             on_result(outcome)
@@ -132,28 +137,33 @@ def clip_all(
             consecutive = 0
             continue
 
+        if _has_code(outcome, ALREADY_ADDED_CODE):
+            already += 1
+            consecutive = 0
+            continue
+
         failures.append(outcome)
         consecutive += 1
         if consecutive >= MAX_CONSECUTIVE_FAILURES:
-            return {
-                "clipped": clipped,
-                "failures": failures,
-                "attempted": index + 1,
-                "stopped": f"{consecutive} consecutive failures",
-                "card_full": False,
-            }
+            reason = f"{consecutive} consecutive failures"
+            return _summary(clipped, already, failures, index + 1, reason, card_full=False)
 
+    return _summary(clipped, already, failures, len(targets), None, card_full=False)
+
+
+def _summary(clipped, already, failures, attempted, stopped, *, card_full) -> dict:
     return {
         "clipped": clipped,
+        "already_clipped": already,
         "failures": failures,
-        "attempted": len(targets),
-        "stopped": None,
-        "card_full": False,
+        "attempted": attempted,
+        "stopped": stopped,
+        "card_full": card_full,
     }
 
 
-def _card_full(outcome: dict) -> bool:
-    return outcome["status"] == 422 and CARD_FULL_CODE in (outcome["body"] or "")
+def _has_code(outcome: dict, code: str) -> bool:
+    return outcome["status"] == 422 and code in (outcome["body"] or "")
 
 
 def _clip_one(http, url: str, coupon, sleep) -> dict:
@@ -172,6 +182,8 @@ def _clip_one(http, url: str, coupon, sleep) -> dict:
         marker = transport.denial(resp)
         if marker:
             raise Blocked(f"refused by Akamai ({marker})")
+
+        transport.raise_for_auth(resp)
 
         return {
             "id": coupon_id,
