@@ -150,6 +150,18 @@ endpoint. `x-laf-object` contains the store's street address, so it is
 PII-adjacent: it lives in the mode-0600 session file and must be scrubbed from
 any committed fixture.
 
+## Confirmed by live clipping (2026-09-05)
+
+- **Enumeration over plain HTTP works** with a browser-shaped TLS fingerprint
+  (`curl_cffi`, `impersonate="chrome"`) plus the captured cookies and store
+  headers. No browser is needed after `login`.
+- **The 150-coupon ceiling is folklore.** A real account enumerated 266 unclipped
+  coupons across three pages of 100 with `page.offset`.
+- **`clip-unclip` succeeds with HTTP 200** for `{"action":"CLIP","couponId":…}`.
+- **Clips are real and immediately visible**: after clipping 3, a re-enumeration
+  returned 263. `filter.status=unclipped` excludes them, so repeat runs are
+  naturally idempotent and cost no wasted POSTs.
+
 ## Open questions requiring an authenticated session
 
 - Name of the actual session cookie.

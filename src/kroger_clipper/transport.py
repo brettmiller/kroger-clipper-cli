@@ -37,11 +37,24 @@ def build(banner: str) -> requests.Session:
     return http
 
 
-def raise_for_block(resp) -> None:
-    """Stop on backpressure rather than pushing through it. See CLAUDE.md."""
-    if resp.status_code == 429:
-        raise Blocked("rate limited (HTTP 429)")
+def rate_limited(resp) -> bool:
+    return resp.status_code == 429
+
+
+def denial(resp) -> str | None:
+    """Akamai serves its refusals as page bodies, sometimes under a 200."""
     body = resp.text[:2000] if resp.text else ""
-    for marker in _BLOCK_MARKERS:
-        if marker in body:
-            raise Blocked(f"refused by Akamai ({marker})")
+    return next((m for m in _BLOCK_MARKERS if m in body), None)
+
+
+def raise_for_block(resp) -> None:
+    """Stop on backpressure rather than pushing through it. See CLAUDE.md.
+
+    Enumeration cannot proceed without a page, so a 429 here is terminal. The
+    clip loop handles 429 differently: it backs off and retries.
+    """
+    if rate_limited(resp):
+        raise Blocked("rate limited (HTTP 429)")
+    marker = denial(resp)
+    if marker:
+        raise Blocked(f"refused by Akamai ({marker})")

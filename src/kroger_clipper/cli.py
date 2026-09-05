@@ -64,13 +64,10 @@ def login(banner: str) -> None:
     "--banner", default="kroger.com", show_default=True, help="Kroger-owned banner domain."
 )
 @click.option("--dry-run", is_flag=True, help="Enumerate unclipped coupons; clip nothing.")
+@click.option("--max-clips", type=int, default=None, help="Stop after this many coupons.")
 @click.option("--json", "as_json", is_flag=True, help="Machine-readable output on stdout.")
-def clip(banner: str, dry_run: bool, as_json: bool) -> None:
+def clip(banner: str, dry_run: bool, max_clips: int | None, as_json: bool) -> None:
     """Clip every unclipped digital coupon."""
-    if not dry_run:
-        click.echo("Clipping is not implemented yet. Re-run with --dry-run.", err=True)
-        sys.exit(EXIT_STRUCTURAL)
-
     try:
         http = transport.build(banner)
         found = coupons.list_unclipped(http, banner)
@@ -84,13 +81,41 @@ def clip(banner: str, dry_run: bool, as_json: bool) -> None:
         click.echo(f"The API did not look as expected: {exc}", err=True)
         sys.exit(EXIT_STRUCTURAL)
 
-    if as_json:
-        click.echo(json.dumps([_summarise(c) for c in found], indent=2))
+    if dry_run:
+        if as_json:
+            click.echo(json.dumps([_summarise(c) for c in found], indent=2))
+            return
+        click.echo(f"{len(found)} unclipped coupon(s)")
+        for coupon in found:
+            click.echo(f"  {coupons.describe(coupon)}")
         return
 
-    click.echo(f"{len(found)} unclipped coupon(s)")
-    for coupon in found:
-        click.echo(f"  {coupons.describe(coupon)}")
+    def report(outcome: dict) -> None:
+        if not outcome["ok"]:
+            click.echo(
+                f"  failed {outcome['id']}: HTTP {outcome['status']} {outcome['body']}", err=True
+            )
+
+    target = min(len(found), max_clips) if max_clips else len(found)
+    click.echo(f"Clipping {target} of {len(found)} unclipped coupon(s)...", err=True)
+    try:
+        result = coupons.clip_all(
+            http, banner, found, limit=max_clips, on_result=None if as_json else report
+        )
+    except errors.Blocked as exc:
+        click.echo(f"Kroger refused the request: {exc}. Stopping.", err=True)
+        sys.exit(EXIT_BLOCKED)
+
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        click.echo(f"Clipped {result['clipped']} of {result['attempted']} attempted.")
+        if result["failures"]:
+            click.echo(f"{len(result['failures'])} failed.", err=True)
+
+    if result["stopped"]:
+        click.echo(f"Stopped early: {result['stopped']}", err=True)
+        sys.exit(EXIT_STRUCTURAL)
 
 
 def _summarise(coupon: dict) -> dict:

@@ -1,7 +1,11 @@
+import random
+import time
+
 from . import transport
-from .errors import StructuralError
+from .errors import Blocked, StructuralError
 
 API_PATH = "/atlas/v1/savings-coupons/v1/coupons"
+CLIP_PATH = "/atlas/v1/savings-coupons/v1/clip-unclip"
 PAGE_SIZE = 100
 
 # The page loop must terminate even if hasMore is wrong forever.
@@ -63,3 +67,77 @@ def describe(coupon: dict) -> str:
     title = coupon.get("shortDescription") or coupon.get("title") or "(no description)"
     expires = coupon.get("expirationDate") or "?"
     return f"{brand}: {title} (expires {expires})"
+
+
+# Clipping is one POST per coupon; there is no batch endpoint. Pacing is not
+# throttling for its own sake - a few hundred milliseconds between requests
+# costs nothing on a weekly run and keeps the traffic shape unremarkable.
+DELAY_RANGE_S = (0.3, 1.0)
+
+# Individual coupons fail for their own reasons; five in a row is not
+# coincidence, it means something systemic broke and the rest are futile.
+MAX_CONSECUTIVE_FAILURES = 5
+
+RETRY_BACKOFF_S = (5, 15, 45, 120)
+
+
+def clip_all(http, banner: str, items, *, limit=None, sleep=time.sleep, on_result=None) -> dict:
+    """Clip each coupon in turn, pacing between them and stopping on systemic failure."""
+    url = f"https://www.{banner}{CLIP_PATH}"
+    targets = list(items)[:limit] if limit else list(items)
+
+    clipped = 0
+    failures: list[dict] = []
+    consecutive = 0
+
+    for index, coupon in enumerate(targets):
+        if index:
+            sleep(random.uniform(*DELAY_RANGE_S))
+
+        outcome = _clip_one(http, url, coupon, sleep)
+        if on_result:
+            on_result(outcome)
+
+        if outcome["ok"]:
+            clipped += 1
+            consecutive = 0
+            continue
+
+        failures.append(outcome)
+        consecutive += 1
+        if consecutive >= MAX_CONSECUTIVE_FAILURES:
+            return {
+                "clipped": clipped,
+                "failures": failures,
+                "attempted": index + 1,
+                "stopped": f"{consecutive} consecutive failures",
+            }
+
+    return {"clipped": clipped, "failures": failures, "attempted": len(targets), "stopped": None}
+
+
+def _clip_one(http, url: str, coupon, sleep) -> dict:
+    coupon_id = coupon["id"] if isinstance(coupon, dict) else coupon
+    payload = {"action": "CLIP", "couponId": coupon_id}
+
+    for attempt in range(len(RETRY_BACKOFF_S) + 1):
+        resp = http.post(url, json=payload)
+
+        if transport.rate_limited(resp):
+            if attempt == len(RETRY_BACKOFF_S):
+                break
+            sleep(RETRY_BACKOFF_S[attempt])
+            continue
+
+        marker = transport.denial(resp)
+        if marker:
+            raise Blocked(f"refused by Akamai ({marker})")
+
+        return {
+            "id": coupon_id,
+            "ok": 200 <= resp.status_code < 300,
+            "status": resp.status_code,
+            "body": (resp.text or "")[:300],
+        }
+
+    raise Blocked("still rate limited after backing off")
