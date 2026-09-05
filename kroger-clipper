@@ -1,22 +1,22 @@
-#!/usr/bin/env bash
-# Launcher intended to be symlinked onto PATH, e.g.
-#   ln -s "$PWD/kroger-clipper" ~/.local/bin/kroger-clipper
-set -euo pipefail
+#!/usr/bin/env python3
+"""Launcher intended to be symlinked onto PATH, e.g.
 
-# Resolve this script's real location. $0 is the symlink when invoked through
-# one, so follow the chain to find the repo rather than the link's directory.
-source=${BASH_SOURCE[0]}
-while [ -L "$source" ]; do
-    dir=$(cd -P "$(dirname "$source")" && pwd)
-    source=$(readlink "$source")
-    [ "${source:0:1}" = "/" ] || source=$dir/$source
-done
-repo=$(cd -P "$(dirname "$source")" && pwd)
+    ln -s "$PWD/kroger-clipper" ~/.local/bin/kroger-clipper
+"""
 
-if ! command -v uv >/dev/null 2>&1; then
-    echo "kroger-clipper: uv is not on PATH (https://docs.astral.sh/uv/)" >&2
-    exit 127
-fi
+import os
+import shutil
+import sys
+from pathlib import Path
+
+# resolve() follows the whole symlink chain, so this finds the repo rather than
+# whichever directory the symlink happens to live in.
+REPO = Path(__file__).resolve().parent
+
+uv = shutil.which("uv")
+if uv is None:
+    sys.exit("kroger-clipper: uv is not on PATH — see https://docs.astral.sh/uv/")
 
 # --project keeps the caller's working directory intact, unlike --directory.
-exec uv run --quiet --project "$repo" kroger-clipper "$@"
+# exec rather than subprocess so signals and the exit code pass straight through.
+os.execv(uv, [uv, "run", "--quiet", "--project", str(REPO), "kroger-clipper", *sys.argv[1:]])
