@@ -1,0 +1,31 @@
+# Secrets and session state.
+# The tool writes none of these here — real config and session live under
+# $XDG_CONFIG_HOME and $XDG_STATE_HOME. Listed as defence in depth.
+.session/
+storage_state.json
+*.cookies.json
+.env
+config.ini
+config.toml
+
+# Raw, unscrubbed API captures.
+# Scrubbed fixtures under tests/fixtures/ are committed; these are not.
+tests/captures/
+
+# Browser profile
+.user-data/
+.playwright/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# macOS
+.DS_Store
