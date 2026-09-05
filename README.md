@@ -114,6 +114,10 @@ documented in [docs/research/kroger-internal-api.md](docs/research/kroger-intern
 project vocabulary in [CONTEXT.md](CONTEXT.md), and known gaps in
 [docs/BACKLOG.md](docs/BACKLOG.md).
 
+## Licence
+
+MIT. See [LICENSE](LICENSE).
+
 ## Prior art
 
 [Shmakov/kroger-cli](https://github.com/Shmakov/kroger-cli) does the same job by

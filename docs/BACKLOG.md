@@ -101,8 +101,6 @@ documented interface for scheduled use.
 
 ## Housekeeping
 
-- **No licence.** A public repo with no `LICENSE` file is all-rights-reserved by
-  default, which is probably not the intent.
 - **No CI.** Tests are fast and offline, so this is cheap to add — but it depends
   on committed fixtures existing first.
 - **Playwright's bundled Chromium (~290MB) is unused.** `login` drives real

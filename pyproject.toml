@@ -2,6 +2,9 @@
 name = "kroger-clipper"
 version = "0.1.0"
 description = "Clip Kroger digital coupons from the command line"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.1",
