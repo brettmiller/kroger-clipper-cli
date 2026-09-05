@@ -51,9 +51,11 @@ base directory spec, with the environment variables honoured when set:
 
 | What | Path |
 | --- | --- |
-| Config | `${XDG_CONFIG_HOME:-~/.config}/kroger-clipper/config.toml` |
 | Session | `${XDG_STATE_HOME:-~/.local/state}/kroger-clipper/session.json` (mode 0600) |
 | Browser profile | `${XDG_STATE_HOME:-~/.local/state}/kroger-clipper/browser/` |
+
+There is no configuration file. `paths.config_dir()` exists for one but nothing
+reads it — do not document a config file until something does.
 
 `platformdirs` is deliberately not used: on macOS it resolves to
 `~/Library/Application Support`, and this project wants the XDG paths on every

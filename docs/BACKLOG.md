@@ -61,6 +61,12 @@ Cookie loading, domain defaulting, and header merging have no coverage. It is
 also the one module where a mistake is silent — a dropped cookie looks like an
 auth failure, not a bug.
 
+### `paths.config_dir()` is dead code
+
+Nothing reads a configuration file; the function is exercised only by its own
+tests. Either add config-file support or delete it. It was briefly documented in
+`CLAUDE.md` as though it existed.
+
 ### No CLI-level tests
 
 Exit codes and `--json` output shape are asserted nowhere, despite being the
@@ -95,8 +101,8 @@ documented interface for scheduled use.
 
 ## Housekeeping
 
-- **No README.** The repo is public and explains itself only through `CLAUDE.md`
-  and `docs/`.
+- **No licence.** A public repo with no `LICENSE` file is all-rights-reserved by
+  default, which is probably not the intent.
 - **No CI.** Tests are fast and offline, so this is cheap to add — but it depends
   on committed fixtures existing first.
 - **Playwright's bundled Chromium (~290MB) is unused.** `login` drives real
