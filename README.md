@@ -21,8 +21,8 @@ your card before you get to the store.
 ## Install
 
 ```sh
-git clone git@github.com:brettmiller/kroger-clipper.git
-cd kroger-clipper
+git clone git@github.com:brettmiller/kroger-clipper-cli.git
+cd kroger-clipper-cli
 uv tool install --editable .
 ```
 

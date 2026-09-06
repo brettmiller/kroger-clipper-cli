@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues live in GitHub Issues for `brettmiller/kroger-clipper`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues for `brettmiller/kroger-clipper-cli`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
