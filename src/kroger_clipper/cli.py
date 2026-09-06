@@ -20,6 +20,11 @@ class DetailedGroup(click.Group):
     in full costs a dozen lines and saves the round trip.
     """
 
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        # login is setup you run rarely; clip and unclip are the everyday pair and
+        # belong next to each other, in both the summary and the expansions.
+        return sorted(super().list_commands(ctx), key=lambda name: (name == "login", name))
+
     def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         super().format_help(ctx, formatter)
         for name in self.list_commands(ctx):

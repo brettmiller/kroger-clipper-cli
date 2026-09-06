@@ -497,3 +497,11 @@ def test_nothing_to_do_is_not_an_error(runner, no_network, monkeypatch):
 
     assert result.exit_code == 0
     assert "Nothing to do" in result.output
+
+
+def test_login_is_listed_last(runner):
+    """clip and unclip are the everyday pair; login is setup and should not split them."""
+    out = runner.invoke(cli.main, ["--help"], prog_name="kroger-clipper").output
+
+    order = [out.index(f"kroger-clipper {name}:") for name in ("clip", "unclip", "login")]
+    assert order == sorted(order)
