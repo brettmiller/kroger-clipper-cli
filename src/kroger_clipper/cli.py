@@ -103,6 +103,11 @@ def login(banner: str) -> None:
         click.echo("  (session is saved; the API call itself did not succeed)", err=True)
 
 
+def _csv(_ctx, _param, value: tuple[str, ...]) -> tuple[str, ...]:
+    """Accept `--x a,b` as well as `--x a --x b`, and any mix of the two."""
+    return tuple(part.strip() for item in value for part in item.split(",") if part.strip())
+
+
 def _shared_options(command):
     """Options both directions need. Two commands, one vocabulary."""
     for option in reversed(
@@ -118,19 +123,22 @@ def _shared_options(command):
                 "--department",
                 "departments",
                 multiple=True,
-                help="Only this department; pass the option again for more.",
+                callback=_csv,
+                help="Only these departments, comma-separated.",
             ),
             click.option(
                 "--exclude-department",
                 "exclude_departments",
                 multiple=True,
-                help="Skip this department; pass the option again for more.",
+                callback=_csv,
+                help="Skip these departments, comma-separated.",
             ),
             click.option(
                 "--way-to-shop",
                 "ways_to_shop",
                 multiple=True,
-                help="Only IN_STORE, PICKUP or DELIVERY; pass the option again for more.",
+                callback=_csv,
+                help="Only these, comma-separated: IN_STORE, PICKUP, DELIVERY.",
             ),
             click.option(
                 "--list-filters",

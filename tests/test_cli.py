@@ -505,3 +505,32 @@ def test_login_is_listed_last(runner):
 
     order = [out.index(f"kroger-clipper {name}:") for name in ("clip", "unclip", "login")]
     assert order == sorted(order)
+
+
+def _kept(runner, monkeypatch, args):
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(4))
+    out = runner.invoke(cli.main, ["clip", "--dry-run", *args]).output
+    return [ln.strip().split(":")[0] for ln in out.splitlines() if ln.startswith("  ")]
+
+
+def test_comma_separated_values(runner, no_network, monkeypatch):
+    """fake_coupons alternates Dairy/Frozen, so both departments means everything."""
+    assert len(_kept(runner, monkeypatch, ["--department", "Dairy,Frozen"])) == 4
+
+
+def test_repeated_options_still_work(runner, no_network, monkeypatch):
+    assert len(_kept(runner, monkeypatch, ["--department", "Dairy", "--department", "Frozen"])) == 4
+
+
+def test_commas_and_repeats_can_be_mixed(runner, no_network, monkeypatch):
+    args = ["--department", "Dairy,Nonexistent", "--department", "Frozen"]
+    assert len(_kept(runner, monkeypatch, args)) == 4
+
+
+def test_whitespace_around_commas_is_ignored(runner, no_network, monkeypatch):
+    assert len(_kept(runner, monkeypatch, ["--department", " Dairy , Frozen "])) == 4
+
+
+def test_empty_segments_are_dropped(runner, no_network, monkeypatch):
+    """A trailing comma must not become an empty department that matches nothing."""
+    assert len(_kept(runner, monkeypatch, ["--department", "Dairy,,"])) == 2

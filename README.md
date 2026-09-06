@@ -69,19 +69,16 @@ Kroger's site filters by "Departments" and "Ways to shop"; both are available
 here, applied locally to the coupons already fetched:
 
 ```sh
-kroger-clipper clip --list-filters              # what departments exist, with counts
-kroger-clipper clip --department Dairy          # only these (repeatable)
-kroger-clipper clip --exclude-department Beer   # skip these (repeatable)
-kroger-clipper clip --way-to-shop IN_STORE      # IN_STORE, PICKUP, DELIVERY
+kroger-clipper clip --list-filters                    # what exists, with counts
+kroger-clipper clip --department Dairy,Bakery         # only these
+kroger-clipper clip --exclude-department Beer,Wine    # skip these
+kroger-clipper clip --way-to-shop IN_STORE,PICKUP
 ```
 
-Pass an option more than once to give it several values:
+Values are comma-separated; passing an option more than once works too, and the
+two can be mixed.
 
-```sh
-kroger-clipper clip --department Dairy --department Bakery
-```
-
-Repeats within one option are OR-ed (Dairy *or* Bakery); different options are
+Values within one option are OR-ed (Dairy *or* Bakery); different options are
 AND-ed (in that department *and* available that way to shop). Names are matched
 case-insensitively. Filtering happens on this side rather than
 through the API's own `filter.category`, which answers HTTP 500 for a department
