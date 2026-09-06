@@ -47,7 +47,9 @@ class DetailedGroup(click.Group):
 
 
 @click.group(cls=DetailedGroup)
-@click.version_option()
+# The distribution is kroger-clipper-cli but the import package is
+# kroger_clipper; click guesses the latter and fails to find it.
+@click.version_option(package_name="kroger-clipper-cli")
 def main() -> None:
     """Clip Kroger digital coupons from the command line."""
 

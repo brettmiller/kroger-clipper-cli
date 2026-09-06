@@ -315,3 +315,11 @@ def test_a_failed_login_does_not_loop(runner, interactive, monkeypatch):
 
     assert "Sign-in failed" in result.output
     assert result.exit_code == cli.EXIT_SESSION_EXPIRED
+
+
+def test_version_resolves_against_the_real_distribution(runner):
+    """The dist is kroger-clipper-cli; the import package is kroger_clipper."""
+    result = runner.invoke(cli.main, ["--version"])
+
+    assert result.exit_code == 0
+    assert "version" in result.output

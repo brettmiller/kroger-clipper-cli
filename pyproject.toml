@@ -1,5 +1,5 @@
 [project]
-name = "kroger-clipper"
+name = "kroger-clipper-cli"
 version = "0.1.0"
 description = "Clip Kroger digital coupons from the command line"
 readme = "README.md"
