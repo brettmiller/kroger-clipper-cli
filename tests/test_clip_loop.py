@@ -48,16 +48,16 @@ def items(count):
 
 def test_clips_every_coupon_once():
     http = StubHttp([ok(), ok(), ok()])
-    result = coupons.clip_all(http, "kroger.com", items(3), sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(3), sleep=Clock())
 
-    assert result["clipped"] == 3
+    assert result["succeeded"] == 3
     assert result["stopped"] is None
     assert len(http.posts) == 3
 
 
 def test_sends_the_documented_payload():
     http = StubHttp([ok()])
-    coupons.clip_all(http, "kroger.com", items(1), sleep=Clock())
+    coupons.apply_all(http, "kroger.com", items(1), sleep=Clock())
 
     url, body = http.posts[0]
     assert url.endswith("/atlas/v1/savings-coupons/v1/clip-unclip")
@@ -66,7 +66,7 @@ def test_sends_the_documented_payload():
 
 def test_paces_between_coupons_but_not_before_the_first():
     clock = Clock()
-    coupons.clip_all(StubHttp([ok(), ok(), ok()]), "kroger.com", items(3), sleep=clock)
+    coupons.apply_all(StubHttp([ok(), ok(), ok()]), "kroger.com", items(3), sleep=clock)
 
     assert len(clock.slept) == 2
     assert all(coupons.DELAY_RANGE_S[0] <= s <= coupons.DELAY_RANGE_S[1] for s in clock.slept)
@@ -74,7 +74,7 @@ def test_paces_between_coupons_but_not_before_the_first():
 
 def test_delay_range_is_configurable():
     clock = Clock()
-    coupons.clip_all(
+    coupons.apply_all(
         StubHttp([ok(), ok(), ok()]),
         "kroger.com",
         items(3),
@@ -88,12 +88,12 @@ def test_delay_range_is_configurable():
 @pytest.mark.parametrize("bad", [(-1, 1), (1.0, 0.5)])
 def test_nonsense_delay_ranges_are_rejected(bad):
     with pytest.raises(ValueError, match="invalid delay range"):
-        coupons.clip_all(StubHttp([ok()]), "kroger.com", items(1), delay_range=bad, sleep=Clock())
+        coupons.apply_all(StubHttp([ok()]), "kroger.com", items(1), delay_range=bad, sleep=Clock())
 
 
 def test_a_zero_delay_is_allowed_but_not_the_default():
     clock = Clock()
-    coupons.clip_all(
+    coupons.apply_all(
         StubHttp([ok(), ok()]), "kroger.com", items(2), delay_range=(0, 0), sleep=clock
     )
 
@@ -103,9 +103,9 @@ def test_a_zero_delay_is_allowed_but_not_the_default():
 
 def test_individual_failure_is_survivable_and_recorded():
     http = StubHttp([ok(), fail(), ok()])
-    result = coupons.clip_all(http, "kroger.com", items(3), sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(3), sleep=Clock())
 
-    assert result["clipped"] == 2
+    assert result["succeeded"] == 2
     assert [f["status"] for f in result["failures"]] == [400]
     assert result["failures"][0]["body"]  # status *and* body, so max-reached is diagnosable
     assert result["stopped"] is None
@@ -113,9 +113,9 @@ def test_individual_failure_is_survivable_and_recorded():
 
 def test_stops_after_five_consecutive_failures():
     http = StubHttp([fail() for _ in range(5)])
-    result = coupons.clip_all(http, "kroger.com", items(20), sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(20), sleep=Clock())
 
-    assert result["clipped"] == 0
+    assert result["succeeded"] == 0
     assert result["attempted"] == 5
     assert "consecutive" in result["stopped"]
     assert len(http.posts) == 5
@@ -123,9 +123,9 @@ def test_stops_after_five_consecutive_failures():
 
 def test_a_success_resets_the_consecutive_counter():
     http = StubHttp([fail(), fail(), fail(), fail(), ok(), fail(), fail()])
-    result = coupons.clip_all(http, "kroger.com", items(7), sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(7), sleep=Clock())
 
-    assert result["clipped"] == 1
+    assert result["succeeded"] == 1
     assert result["stopped"] is None
     assert len(http.posts) == 7
 
@@ -133,9 +133,9 @@ def test_a_success_resets_the_consecutive_counter():
 def test_rate_limit_backs_off_and_retries_rather_than_aborting():
     clock = Clock()
     http = StubHttp([StubResponse(status_code=429, text=""), ok()])
-    result = coupons.clip_all(http, "kroger.com", items(1), sleep=clock)
+    result = coupons.apply_all(http, "kroger.com", items(1), sleep=clock)
 
-    assert result["clipped"] == 1
+    assert result["succeeded"] == 1
     assert clock.slept == [coupons.RETRY_BACKOFF_S[0]]
 
 
@@ -145,7 +145,7 @@ def test_backoff_is_exponential_then_gives_up():
     http = StubHttp([StubResponse(status_code=429, text="") for _ in range(attempts)])
 
     with pytest.raises(Blocked, match="still rate limited"):
-        coupons.clip_all(http, "kroger.com", items(1), sleep=clock)
+        coupons.apply_all(http, "kroger.com", items(1), sleep=clock)
 
     assert clock.slept == list(coupons.RETRY_BACKOFF_S)
 
@@ -153,21 +153,21 @@ def test_backoff_is_exponential_then_gives_up():
 def test_akamai_denial_aborts_immediately():
     http = StubHttp([StubResponse(status_code=200, text="Access Denied edgesuite")])
     with pytest.raises(Blocked, match="Akamai"):
-        coupons.clip_all(http, "kroger.com", items(3), sleep=Clock())
+        coupons.apply_all(http, "kroger.com", items(3), sleep=Clock())
 
 
 def test_limit_caps_the_run():
     http = StubHttp([ok(), ok()])
-    result = coupons.clip_all(http, "kroger.com", items(10), limit=2, sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(10), limit=2, sleep=Clock())
 
-    assert result["clipped"] == 2
+    assert result["succeeded"] == 2
     assert len(http.posts) == 2
 
 
 def test_on_result_sees_every_outcome():
     seen = []
     http = StubHttp([ok(), fail()])
-    coupons.clip_all(http, "kroger.com", items(2), sleep=Clock(), on_result=seen.append)
+    coupons.apply_all(http, "kroger.com", items(2), sleep=Clock(), on_result=seen.append)
 
     assert [o["ok"] for o in seen] == [True, False]
 
@@ -175,16 +175,16 @@ def test_on_result_sees_every_outcome():
 def test_card_full_stops_on_the_first_rejection():
     """Once the card is full every further clip fails; proving it five times is waste."""
     http = StubHttp([ok(), ok(), card_full()])
-    result = coupons.clip_all(http, "kroger.com", items(50), sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(50), sleep=Clock())
 
-    assert result["clipped"] == 2
+    assert result["succeeded"] == 2
     assert result["card_full"] is True
     assert len(http.posts) == 3
 
 
 def test_card_full_is_not_an_error_condition():
     http = StubHttp([ok(), card_full()])
-    result = coupons.clip_all(http, "kroger.com", items(10), sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(10), sleep=Clock())
 
     # A full card ended the run normally: no failures recorded, no abort reason.
     assert result["failures"] == []
@@ -194,16 +194,16 @@ def test_card_full_is_not_an_error_condition():
 def test_a_plain_422_is_still_a_normal_failure():
     """Only the documented card-full code is special; other 422s are just failures."""
     http = StubHttp([StubResponse(status_code=422, text='{"errors":{"code":"Whatever"}}'), ok()])
-    result = coupons.clip_all(http, "kroger.com", items(2), sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(2), sleep=Clock())
 
     assert result["card_full"] is False
     assert len(result["failures"]) == 1
-    assert result["clipped"] == 1
+    assert result["succeeded"] == 1
 
 
 def test_consecutive_failure_abort_reports_card_full_false():
     http = StubHttp([fail() for _ in range(5)])
-    result = coupons.clip_all(http, "kroger.com", items(20), sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(20), sleep=Clock())
 
     assert result["card_full"] is False
     assert "consecutive" in result["stopped"]
@@ -222,10 +222,10 @@ def already():
 def test_already_clipped_is_counted_separately_not_as_a_failure():
     """filter.status=unclipped can return stale entries; that is not a fault."""
     http = StubHttp([ok(), already(), ok()])
-    result = coupons.clip_all(http, "kroger.com", items(3), sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(3), sleep=Clock())
 
-    assert result["clipped"] == 2
-    assert result["already_clipped"] == 1
+    assert result["succeeded"] == 2
+    assert result["already_done"] == 1
     assert result["failures"] == []
     assert result["stopped"] is None
 
@@ -233,10 +233,10 @@ def test_already_clipped_is_counted_separately_not_as_a_failure():
 def test_stale_enumeration_cannot_trip_the_consecutive_abort():
     """Five already-clipped in a row must not look like five failures."""
     http = StubHttp([already() for _ in range(6)] + [ok()])
-    result = coupons.clip_all(http, "kroger.com", items(7), sleep=Clock())
+    result = coupons.apply_all(http, "kroger.com", items(7), sleep=Clock())
 
-    assert result["already_clipped"] == 6
-    assert result["clipped"] == 1
+    assert result["already_done"] == 6
+    assert result["succeeded"] == 1
     assert result["stopped"] is None
 
 
@@ -245,4 +245,35 @@ def test_unauthenticated_clip_raises_session_expired():
     http = StubHttp([StubResponse(status_code=401, text=body)])
 
     with pytest.raises(SessionExpired):
-        coupons.clip_all(http, "kroger.com", items(3), sleep=Clock())
+        coupons.apply_all(http, "kroger.com", items(3), sleep=Clock())
+
+
+def test_unclip_sends_the_unclip_action():
+    http = StubHttp([ok(), ok()])
+    coupons.apply_all(http, "kroger.com", items(2), action=coupons.UNCLIP, sleep=Clock())
+
+    assert [body["action"] for _url, body in http.posts] == ["UNCLIP", "UNCLIP"]
+
+
+def test_clip_is_still_the_default_action():
+    http = StubHttp([ok()])
+    coupons.apply_all(http, "kroger.com", items(1), sleep=Clock())
+
+    assert http.posts[0][1]["action"] == "CLIP"
+
+
+def test_an_unknown_action_is_rejected_before_any_request():
+    http = StubHttp([])
+    with pytest.raises(ValueError, match="unknown action"):
+        coupons.apply_all(http, "kroger.com", items(3), action="DELETE", sleep=Clock())
+    assert http.posts == []
+
+
+def test_unclip_shares_the_pacing_and_abort_rules():
+    """The 429 backoff and failure limit are properties of the API, not of clipping."""
+    clock = Clock()
+    http = StubHttp([fail() for _ in range(5)])
+    result = coupons.apply_all(http, "kroger.com", items(20), action=coupons.UNCLIP, sleep=clock)
+
+    assert "consecutive" in result["stopped"]
+    assert len(http.posts) == 5

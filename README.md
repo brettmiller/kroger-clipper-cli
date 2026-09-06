@@ -51,6 +51,18 @@ kroger-clipper clip --json           # machine-readable summary
 kroger-clipper clip --delay 0.2 0.5  # seconds between clips (default 0.2 0.7)
 ```
 
+### Removing coupons
+
+```sh
+kroger-clipper unclip --dry-run                  # what is on the card
+kroger-clipper unclip --department Beer          # remove just those
+kroger-clipper unclip --yes                      # skip the confirmation
+```
+
+`unclip` takes the same filters as `clip` and asks before removing anything.
+Useful because the card holds only 250 coupons: what is already on it decides
+what will fit.
+
 ### Filtering
 
 Kroger's site filters by "Departments" and "Ways to shop"; both are available

@@ -33,8 +33,8 @@ def fake_coupons(count=2):
 
 def summary(**overrides):
     base = {
-        "clipped": 2,
-        "already_clipped": 0,
+        "succeeded": 2,
+        "already_done": 0,
         "failures": [],
         "attempted": 2,
         "stopped": None,
@@ -44,8 +44,8 @@ def summary(**overrides):
 
 
 def test_dry_run_lists_and_clips_nothing(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(2))
-    monkeypatch.setattr(coupons, "clip_all", lambda *a, **k: pytest.fail("dry run must not clip"))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(2))
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: pytest.fail("dry run must not clip"))
 
     result = runner.invoke(cli.main, ["clip", "--dry-run"])
 
@@ -55,7 +55,7 @@ def test_dry_run_lists_and_clips_nothing(runner, no_network, monkeypatch):
 
 
 def test_dry_run_json_is_parseable(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(1))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(1))
 
     result = runner.invoke(cli.main, ["clip", "--dry-run", "--json"])
 
@@ -81,8 +81,8 @@ def test_expired_session_exits_2_not_3(runner, no_network, monkeypatch):
     def boom(*_a, **_k):
         raise errors.SessionExpired("Kroger rejected the session")
 
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(1))
-    monkeypatch.setattr(coupons, "clip_all", boom)
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(1))
+    monkeypatch.setattr(coupons, "apply_all", boom)
 
     result = runner.invoke(cli.main, ["clip"])
 
@@ -94,7 +94,7 @@ def test_blocked_exits_4(runner, no_network, monkeypatch):
     def boom(*_a, **_k):
         raise errors.Blocked("rate limited (HTTP 429)")
 
-    monkeypatch.setattr(coupons, "list_unclipped", boom)
+    monkeypatch.setattr(coupons, "list_by_status", boom)
     result = runner.invoke(cli.main, ["clip"])
 
     assert result.exit_code == cli.EXIT_BLOCKED
@@ -104,16 +104,16 @@ def test_structural_error_exits_3(runner, no_network, monkeypatch):
     def boom(*_a, **_k):
         raise errors.StructuralError("response is missing data.coupons")
 
-    monkeypatch.setattr(coupons, "list_unclipped", boom)
+    monkeypatch.setattr(coupons, "list_by_status", boom)
     result = runner.invoke(cli.main, ["clip"])
 
     assert result.exit_code == cli.EXIT_STRUCTURAL
 
 
 def test_a_full_card_exits_0(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(5))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(5))
     monkeypatch.setattr(
-        coupons, "clip_all", lambda *a, **k: summary(clipped=0, attempted=1, card_full=True)
+        coupons, "apply_all", lambda *a, **k: summary(succeeded=0, attempted=1, card_full=True)
     )
 
     result = runner.invoke(cli.main, ["clip"])
@@ -123,11 +123,11 @@ def test_a_full_card_exits_0(runner, no_network, monkeypatch):
 
 
 def test_consecutive_failures_exit_3(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(9))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(9))
     monkeypatch.setattr(
         coupons,
-        "clip_all",
-        lambda *a, **k: summary(clipped=0, attempted=5, stopped="5 consecutive failures"),
+        "apply_all",
+        lambda *a, **k: summary(succeeded=0, attempted=5, stopped="5 consecutive failures"),
     )
 
     result = runner.invoke(cli.main, ["clip"])
@@ -137,8 +137,8 @@ def test_consecutive_failures_exit_3(runner, no_network, monkeypatch):
 
 
 def test_already_clipped_is_reported(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(3))
-    monkeypatch.setattr(coupons, "clip_all", lambda *a, **k: summary(already_clipped=2))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(3))
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: summary(already_done=2))
 
     result = runner.invoke(cli.main, ["clip"])
 
@@ -147,7 +147,7 @@ def test_already_clipped_is_reported(runner, no_network, monkeypatch):
 
 
 def test_nonsense_delay_exits_3(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(1))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(1))
     result = runner.invoke(cli.main, ["clip", "--delay", "5", "1"])
 
     assert result.exit_code == cli.EXIT_STRUCTURAL
@@ -160,8 +160,8 @@ def test_max_clips_is_passed_through(runner, no_network, monkeypatch):
         seen.update(kwargs)
         return summary()
 
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(10))
-    monkeypatch.setattr(coupons, "clip_all", capture)
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(10))
+    monkeypatch.setattr(coupons, "apply_all", capture)
     runner.invoke(cli.main, ["clip", "--max-clips", "3"])
 
     assert seen["limit"] == 3
@@ -229,14 +229,14 @@ def _fails_with(monkeypatch, exc, then=None):
         return object()
 
     monkeypatch.setattr(transport, "build", build)
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: then or [])
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: then or [])
     return calls
 
 
 def test_stale_session_prompts_and_retries_after_login(runner, interactive, monkeypatch):
     logins = []
     monkeypatch.setattr(cli.session_mod, "login", lambda b: logins.append(b))
-    monkeypatch.setattr(coupons, "clip_all", lambda *a, **k: summary())
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: summary())
     _fails_with(monkeypatch, errors.SessionExpired("session rejected"), then=fake_coupons(1))
 
     result = runner.invoke(cli.main, ["clip"], input="y\n")
@@ -272,7 +272,7 @@ def test_non_interactive_never_opens_a_browser(runner, headless, monkeypatch):
 def test_a_reset_connection_also_offers_login(runner, interactive, monkeypatch):
     logins = []
     monkeypatch.setattr(cli.session_mod, "login", lambda b: logins.append(b))
-    monkeypatch.setattr(coupons, "clip_all", lambda *a, **k: summary())
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: summary())
     _fails_with(monkeypatch, errors.ConnectionReset("edge reset"), then=fake_coupons(1))
 
     result = runner.invoke(cli.main, ["clip"], input="y\n")
@@ -328,7 +328,7 @@ def test_version_resolves_against_the_real_distribution(runner):
 
 
 def test_department_filter_narrows_the_dry_run(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(4))
 
     result = runner.invoke(cli.main, ["clip", "--dry-run", "--department", "Dairy"])
 
@@ -337,7 +337,7 @@ def test_department_filter_narrows_the_dry_run(runner, no_network, monkeypatch):
 
 
 def test_excluded_department_is_dropped(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(4))
 
     result = runner.invoke(cli.main, ["clip", "--dry-run", "--exclude-department", "Frozen"])
 
@@ -351,17 +351,17 @@ def test_filters_apply_to_clipping_not_just_dry_run(runner, no_network, monkeypa
         seen["ids"] = [c["id"] for c in items]
         return summary()
 
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
-    monkeypatch.setattr(coupons, "clip_all", capture)
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(4))
+    monkeypatch.setattr(coupons, "apply_all", capture)
     runner.invoke(cli.main, ["clip", "--department", "Dairy"])
 
     assert seen["ids"] == ["c0", "c2"]
 
 
 def test_list_filters_shows_the_vocabulary(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(4))
     monkeypatch.setattr(
-        coupons, "clip_all", lambda *a, **k: pytest.fail("--list-filters must not clip")
+        coupons, "apply_all", lambda *a, **k: pytest.fail("--list-filters must not clip")
     )
 
     result = runner.invoke(cli.main, ["clip", "--list-filters"])
@@ -372,7 +372,7 @@ def test_list_filters_shows_the_vocabulary(runner, no_network, monkeypatch):
 
 
 def test_list_filters_json(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(4))
 
     payload = json.loads(runner.invoke(cli.main, ["clip", "--list-filters", "--json"]).output)
 
@@ -381,9 +381,119 @@ def test_list_filters_json(runner, no_network, monkeypatch):
 
 
 def test_a_filter_matching_nothing_clips_nothing_and_says_so(runner, no_network, monkeypatch):
-    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(4))
 
     result = runner.invoke(cli.main, ["clip", "--dry-run", "--department", "Nonexistent"])
 
     assert result.exit_code == 0
     assert "0 of 4 coupon(s) match" in result.output
+
+
+def test_unclip_enumerates_clipped_not_unclipped(runner, no_network, monkeypatch):
+    """Unclipping the unclipped list would be a no-op against the wrong coupons."""
+    asked = {}
+
+    def by_status(_http, _banner, status):
+        asked["status"] = status
+        return fake_coupons(2)
+
+    monkeypatch.setattr(coupons, "list_by_status", by_status)
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: summary())
+    runner.invoke(cli.main, ["unclip", "--yes"])
+
+    assert asked["status"] == coupons.CLIPPED
+
+
+def test_clip_enumerates_unclipped(runner, no_network, monkeypatch):
+    asked = {}
+
+    def by_status(_http, _banner, status):
+        asked["status"] = status
+        return fake_coupons(2)
+
+    monkeypatch.setattr(coupons, "list_by_status", by_status)
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: summary())
+    runner.invoke(cli.main, ["clip"])
+
+    assert asked["status"] == coupons.UNCLIPPED
+
+
+def test_unclip_passes_the_unclip_action(runner, no_network, monkeypatch):
+    seen = {}
+
+    def capture(*_a, **kwargs):
+        seen.update(kwargs)
+        return summary()
+
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(2))
+    monkeypatch.setattr(coupons, "apply_all", capture)
+    runner.invoke(cli.main, ["unclip", "--yes"])
+
+    assert seen["action"] == coupons.UNCLIP
+
+
+def test_unclip_asks_before_removing(runner, no_network, monkeypatch):
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(3))
+    monkeypatch.setattr(
+        coupons, "apply_all", lambda *a, **k: pytest.fail("must not act after a refusal")
+    )
+
+    result = runner.invoke(cli.main, ["unclip"], input="n\n")
+
+    assert result.exit_code == 0
+    assert "Cancelled" in result.output
+
+
+def test_unclip_yes_skips_the_prompt(runner, no_network, monkeypatch):
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(3))
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: summary())
+
+    result = runner.invoke(cli.main, ["unclip", "--yes"])
+
+    assert result.exit_code == 0
+    assert "Removed" in result.output
+
+
+def test_clip_never_prompts(runner, no_network, monkeypatch):
+    """Clipping is additive; only removal needs confirming."""
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(3))
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: summary())
+
+    result = runner.invoke(cli.main, ["clip"])
+
+    assert result.exit_code == 0
+    assert "Remove" not in result.output
+
+
+def test_unclip_honours_filters(runner, no_network, monkeypatch):
+    seen = {}
+
+    def capture(_http, _banner, items, **kwargs):
+        seen["ids"] = [c["id"] for c in items]
+        return summary()
+
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(4))
+    monkeypatch.setattr(coupons, "apply_all", capture)
+    runner.invoke(cli.main, ["unclip", "--yes", "--department", "Dairy"])
+
+    assert seen["ids"] == ["c0", "c2"]
+
+
+def test_unclip_dry_run_changes_nothing(runner, no_network, monkeypatch):
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(2))
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: pytest.fail("dry run must not act"))
+
+    result = runner.invoke(cli.main, ["unclip", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "2 clipped coupon(s)" in result.output
+
+
+def test_nothing_to_do_is_not_an_error(runner, no_network, monkeypatch):
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: [])
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: pytest.fail("nothing to act on"))
+
+    result = runner.invoke(cli.main, ["unclip", "--yes"])
+
+    assert result.exit_code == 0
+    assert "Nothing to do" in result.output

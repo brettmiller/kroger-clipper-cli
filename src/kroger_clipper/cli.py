@@ -98,61 +98,105 @@ def login(banner: str) -> None:
         click.echo("  (session is saved; the API call itself did not succeed)", err=True)
 
 
+def _shared_options(command):
+    """Options both directions need. Two commands, one vocabulary."""
+    for option in reversed(
+        (
+            click.option(
+                "--banner",
+                default="kroger.com",
+                show_default=True,
+                help="Kroger-owned banner domain.",
+            ),
+            click.option("--dry-run", is_flag=True, help="Show what would change; change nothing."),
+            click.option(
+                "--department", "departments", multiple=True, help="Only these. Repeatable."
+            ),
+            click.option(
+                "--exclude-department",
+                "exclude_departments",
+                multiple=True,
+                help="Skip these. Repeatable.",
+            ),
+            click.option(
+                "--way-to-shop",
+                "ways_to_shop",
+                multiple=True,
+                help="Only these, e.g. IN_STORE, PICKUP, DELIVERY. Repeatable.",
+            ),
+            click.option(
+                "--list-filters",
+                is_flag=True,
+                help="Show the departments and ways to shop on offer, then exit.",
+            ),
+            click.option(
+                "--delay",
+                nargs=2,
+                type=float,
+                default=coupons.DELAY_RANGE_S,
+                show_default=True,
+                metavar="MIN MAX",
+                help="Seconds to pause between requests, chosen at random in this range.",
+            ),
+            click.option(
+                "--json", "as_json", is_flag=True, help="Machine-readable output on stdout."
+            ),
+        )
+    ):
+        command = option(command)
+    return command
+
+
 @main.command()
-@click.option(
-    "--banner", default="kroger.com", show_default=True, help="Kroger-owned banner domain."
-)
-@click.option("--dry-run", is_flag=True, help="Enumerate unclipped coupons; clip nothing.")
-@click.option(
-    "--department", "departments", multiple=True, help="Only these departments. Repeatable."
-)
-@click.option(
-    "--exclude-department",
-    "exclude_departments",
-    multiple=True,
-    help="Skip these departments. Repeatable.",
-)
-@click.option(
-    "--way-to-shop",
-    "ways_to_shop",
-    multiple=True,
-    help="Only these, e.g. IN_STORE, PICKUP, DELIVERY. Repeatable.",
-)
-@click.option(
-    "--list-filters",
-    is_flag=True,
-    help="Show the departments and ways to shop on offer, then exit.",
-)
-@click.option("--max-clips", type=int, default=None, help="Stop after this many coupons.")
-@click.option(
-    "--delay",
-    nargs=2,
-    type=float,
-    default=coupons.DELAY_RANGE_S,
-    show_default=True,
-    metavar="MIN MAX",
-    help="Seconds to pause between clips, chosen at random in this range.",
-)
-@click.option("--json", "as_json", is_flag=True, help="Machine-readable output on stdout.")
-def clip(
+@_shared_options
+@click.option("--max-clips", "limit", type=int, default=None, help="Stop after this many coupons.")
+def clip(**kwargs) -> None:
+    """Clip every unclipped digital coupon."""
+    _run(coupons.CLIP, **kwargs)
+
+
+@main.command()
+@_shared_options
+@click.option("--limit", type=int, default=None, help="Stop after this many coupons.")
+@click.option("--yes", "assume_yes", is_flag=True, help="Skip the confirmation prompt.")
+def unclip(**kwargs) -> None:
+    """Remove coupons from the card.
+
+    Useful for resetting before a filtered clip: the card holds a limited number
+    of coupons, so what is already on it decides what will fit.
+    """
+    _run(coupons.UNCLIP, **kwargs)
+
+
+# Wording only. The mechanics are identical in both directions.
+_VERBS = {
+    coupons.CLIP: ("Clipping", "Clipped", "unclipped", "were already on the card"),
+    coupons.UNCLIP: ("Removing", "Removed", "clipped", "were not on the card"),
+}
+
+
+def _run(
+    action: str,
     banner: str,
     dry_run: bool,
     departments: tuple[str, ...],
     exclude_departments: tuple[str, ...],
     ways_to_shop: tuple[str, ...],
     list_filters: bool,
-    max_clips: int | None,
+    limit: int | None,
     delay: tuple[float, float],
     as_json: bool,
+    assume_yes: bool = True,
 ) -> None:
-    """Clip every unclipped digital coupon."""
+    gerund, past, noun, already_phrase = _VERBS[action]
+
     try:
-        http, found = _connect(banner)
+        http, found = _connect(banner, action)
     except _Stale as stale:
         if not _relogin(stale.reason, banner):
             sys.exit(stale.exit_code)
         try:
-            http, found = _connect(banner)
+            http, found = _connect(banner, action)
         except _Stale as again:
             click.echo(f"Still refused after signing in: {again.reason}", err=True)
             sys.exit(again.exit_code)
@@ -175,12 +219,25 @@ def clip(
         if as_json:
             click.echo(json.dumps([_summarise(c) for c in found], indent=2))
             return
-        click.echo(f"{len(found)} unclipped coupon(s)")
+        click.echo(f"{len(found)} {noun} coupon(s)")
         for coupon in found:
             click.echo(f"  {coupons.describe(coupon)}")
         return
 
-    target = min(len(found), max_clips) if max_clips else len(found)
+    target = min(len(found), limit) if limit else len(found)
+    if not target:
+        click.echo(f"Nothing to do: no {noun} coupons matched.")
+        return
+
+    # Unclipping throws away work and cannot be undone without re-clipping, so it
+    # asks first. Clipping is additive and does not.
+    needs_confirm = not assume_yes and not as_json
+    if needs_confirm and not click.confirm(
+        f"Remove {target} coupon(s) from the card?", default=False, err=True
+    ):
+        click.echo("Cancelled.", err=True)
+        return
+
     show_progress = sys.stderr.isatty() and not as_json
     seen = 0
 
@@ -193,15 +250,16 @@ def clip(
             )
         elif show_progress:
             # Carriage return, no newline: one live line rather than 250 of scroll.
-            click.echo(f"  {seen}/{target} clipped\r", nl=False, err=True)
+            click.echo(f"  {seen}/{target}\r", nl=False, err=True)
 
-    click.echo(f"Clipping {target} of {len(found)} unclipped coupon(s)...", err=True)
+    click.echo(f"{gerund} {target} of {len(found)} {noun} coupon(s)...", err=True)
     try:
-        result = coupons.clip_all(
+        result = coupons.apply_all(
             http,
             banner,
             found,
-            limit=max_clips,
+            action=action,
+            limit=limit,
             delay_range=delay,
             on_result=None if as_json else report,
         )
@@ -221,9 +279,9 @@ def clip(
     if as_json:
         click.echo(json.dumps(result, indent=2))
     else:
-        click.echo(f"Clipped {result['clipped']} of {result['attempted']} attempted.")
-        if result["already_clipped"]:
-            click.echo(f"{result['already_clipped']} were already on the card.")
+        click.echo(f"{past} {result['succeeded']} of {result['attempted']} attempted.")
+        if result["already_done"]:
+            click.echo(f"{result['already_done']} {already_phrase}.")
         if result["card_full"]:
             click.echo("Card is full — Kroger's per-card coupon limit was reached.")
         if result["failures"]:
@@ -243,11 +301,12 @@ class _Stale(Exception):
         self.exit_code = exit_code
 
 
-def _connect(banner: str):
+def _connect(banner: str, action: str):
     """Build a client and enumerate, translating failures into exits or a retry."""
     try:
         http = transport.build(banner)
-        return http, coupons.list_unclipped(http, banner)
+        status = coupons.UNCLIPPED if action == coupons.CLIP else coupons.CLIPPED
+        return http, coupons.list_by_status(http, banner, status)
     except (errors.SessionMissing, errors.SessionExpired) as exc:
         raise _Stale(str(exc), EXIT_SESSION_EXPIRED) from exc
     except errors.ConnectionReset as exc:

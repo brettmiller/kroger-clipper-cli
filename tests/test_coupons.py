@@ -126,4 +126,4 @@ def test_clip_reports_a_reset_connection_instead_of_a_traceback():
     http = ExplodingHttp(RequestException("reset", transport.HTTP2_STREAM_RESET, None))
 
     with pytest.raises(Blocked, match="kroger-clipper login"):
-        coupons.clip_all(http, "kroger.com", [{"id": "c0"}], sleep=lambda _s: None)
+        coupons.apply_all(http, "kroger.com", [{"id": "c0"}], sleep=lambda _s: None)

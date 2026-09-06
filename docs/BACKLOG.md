@@ -35,8 +35,9 @@ fails the suite.
 - **Pacing at 0.2-0.7s is unvalidated.** The one clean full run used 0.3-1.0s.
   The card filled at 250 before the faster rate could be exercised. The first
   real test is whenever enough coupons expire to leave room.
-- **What `clip-unclip` returns for an already-clipped or expired coupon.**
-  Never observed, because `filter.status=unclipped` means we never ask.
+- **What `UNCLIP` returns for a coupon that is not on the card**, and whether
+  `canBeRemoved: false` coupons reject differently. Neither has been observed;
+  both currently land in the generic failure path, which logs status and body.
 - **How long a session lasts.** Under ~16 hours, measured once. This undercuts
   ADR-0002's assumption that weekly runs would keep a session warm - in practice
   `login` will be needed before most runs.

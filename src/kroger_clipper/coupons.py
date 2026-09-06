@@ -12,13 +12,27 @@ PAGE_SIZE = 100
 MAX_PAGES = 50
 
 
+UNCLIPPED = "unclipped"
+CLIPPED = "active"
+
+
 def list_unclipped(http, banner: str) -> list[dict]:
-    """Every coupon not yet on the card, following pagination to the end."""
+    """Every coupon not yet on the card."""
+    return list_by_status(http, banner, UNCLIPPED)
+
+
+def list_clipped(http, banner: str) -> list[dict]:
+    """Every coupon currently on the card."""
+    return list_by_status(http, banner, CLIPPED)
+
+
+def list_by_status(http, banner: str, status: str) -> list[dict]:
+    """Coupons with the given status, following pagination to the end."""
     url = f"https://www.{banner}{API_PATH}"
     found: list[dict] = []
 
     for page in range(MAX_PAGES):
-        payload = _fetch(http, url, offset=page * PAGE_SIZE)
+        payload = _fetch(http, url, offset=page * PAGE_SIZE, status=status)
         batch = _coupons(payload)
         found.extend(batch)
         if not batch or not _has_more(payload):
@@ -28,17 +42,17 @@ def list_unclipped(http, banner: str) -> list[dict]:
 
 
 def fetch_page(http, banner: str, offset: int = 0, size: int = PAGE_SIZE) -> dict:
-    """One page of the enumerate endpoint, validated. Used by list_unclipped and capture."""
+    """One page of the enumerate endpoint, validated. Used by list_by_status and capture."""
     return _fetch(http, f"https://www.{banner}{API_PATH}", offset=offset, size=size)
 
 
-def _fetch(http, url: str, offset: int, size: int = PAGE_SIZE) -> dict:
+def _fetch(http, url: str, offset: int, size: int = PAGE_SIZE, status: str = UNCLIPPED) -> dict:
     try:
         resp = http.get(
             url,
             params={
                 "projections": "coupons.compact",
-                "filter.status": "unclipped",
+                "filter.status": status,
                 "page.size": size,
                 "page.offset": offset,
             },
@@ -100,17 +114,30 @@ CARD_FULL_CODE = "TooManyCouponsOnCard"
 ALREADY_ADDED_CODE = "CouponAlreadyAdded"
 
 
-def clip_all(
+CLIP = "CLIP"
+UNCLIP = "UNCLIP"
+
+
+def apply_all(
     http,
     banner: str,
     items,
     *,
+    action: str = CLIP,
     limit=None,
     delay_range=DELAY_RANGE_S,
     sleep=time.sleep,
     on_result=None,
 ) -> dict:
-    """Clip each coupon in turn, pacing between them and stopping on systemic failure."""
+    """Apply an action to each coupon in turn, pacing and stopping on systemic failure.
+
+    Both directions share this: the pacing, the 429 backoff and the
+    consecutive-failure abort are properties of talking to Kroger, not of
+    clipping specifically.
+    """
+    if action not in (CLIP, UNCLIP):
+        raise ValueError(f"unknown action: {action}")
+
     low, high = delay_range
     if low < 0 or high < low:
         raise ValueError(f"invalid delay range: {delay_range}")
@@ -118,7 +145,7 @@ def clip_all(
     url = f"https://www.{banner}{CLIP_PATH}"
     targets = list(items)[:limit] if limit else list(items)
 
-    clipped = 0
+    succeeded = 0
     already = 0
     failures: list[dict] = []
     consecutive = 0
@@ -127,16 +154,16 @@ def clip_all(
         if index:
             sleep(random.uniform(low, high))
 
-        outcome = _clip_one(http, url, coupon, sleep)
+        outcome = _apply_one(http, url, coupon, action, sleep)
 
         if _has_code(outcome, CARD_FULL_CODE):
-            return _summary(clipped, already, failures, index + 1, None, card_full=True)
+            return _summary(succeeded, already, failures, index + 1, None, card_full=True)
 
         if on_result:
             on_result(outcome)
 
         if outcome["ok"]:
-            clipped += 1
+            succeeded += 1
             consecutive = 0
             continue
 
@@ -149,15 +176,15 @@ def clip_all(
         consecutive += 1
         if consecutive >= MAX_CONSECUTIVE_FAILURES:
             reason = f"{consecutive} consecutive failures"
-            return _summary(clipped, already, failures, index + 1, reason, card_full=False)
+            return _summary(succeeded, already, failures, index + 1, reason, card_full=False)
 
-    return _summary(clipped, already, failures, len(targets), None, card_full=False)
+    return _summary(succeeded, already, failures, len(targets), None, card_full=False)
 
 
-def _summary(clipped, already, failures, attempted, stopped, *, card_full) -> dict:
+def _summary(succeeded, already, failures, attempted, stopped, *, card_full) -> dict:
     return {
-        "clipped": clipped,
-        "already_clipped": already,
+        "succeeded": succeeded,
+        "already_done": already,
         "failures": failures,
         "attempted": attempted,
         "stopped": stopped,
@@ -169,9 +196,9 @@ def _has_code(outcome: dict, code: str) -> bool:
     return outcome["status"] == 422 and code in (outcome["body"] or "")
 
 
-def _clip_one(http, url: str, coupon, sleep) -> dict:
+def _apply_one(http, url: str, coupon, action: str, sleep) -> dict:
     coupon_id = coupon["id"] if isinstance(coupon, dict) else coupon
-    payload = {"action": "CLIP", "couponId": coupon_id}
+    payload = {"action": action, "couponId": coupon_id}
 
     for attempt in range(len(RETRY_BACKOFF_S) + 1):
         try:
