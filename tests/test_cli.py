@@ -367,8 +367,8 @@ def test_list_filters_shows_the_vocabulary(runner, no_network, monkeypatch):
     result = runner.invoke(cli.main, ["clip", "--list-filters"])
 
     assert result.exit_code == 0
-    assert "dairy" in result.output
-    assert "in_store" in result.output
+    assert "Dairy" in result.output
+    assert "IN_STORE" in result.output
 
 
 def test_list_filters_json(runner, no_network, monkeypatch):
@@ -376,8 +376,8 @@ def test_list_filters_json(runner, no_network, monkeypatch):
 
     payload = json.loads(runner.invoke(cli.main, ["clip", "--list-filters", "--json"]).output)
 
-    assert payload["departments"] == {"dairy": 2, "frozen": 2}
-    assert payload["waysToShop"] == {"in_store": 4}
+    assert payload["departments"] == {"Dairy": 2, "Frozen": 2}
+    assert payload["waysToShop"] == {"IN_STORE": 4}
 
 
 def test_a_filter_matching_nothing_clips_nothing_and_says_so(runner, no_network, monkeypatch):
@@ -534,3 +534,15 @@ def test_whitespace_around_commas_is_ignored(runner, no_network, monkeypatch):
 def test_empty_segments_are_dropped(runner, no_network, monkeypatch):
     """A trailing comma must not become an empty department that matches nothing."""
     assert len(_kept(runner, monkeypatch, ["--department", "Dairy,,"])) == 2
+
+
+def test_a_department_with_spaces_and_an_ampersand(runner, no_network, monkeypatch):
+    catalogue = [
+        {"id": "a", "brandName": "X", "shortDescription": "s", "categories": ["Health & Beauty"]},
+        {"id": "b", "brandName": "Y", "shortDescription": "t", "categories": ["Dairy"]},
+    ]
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: catalogue)
+
+    result = runner.invoke(cli.main, ["clip", "--dry-run", "--department", "Health & Beauty"])
+
+    assert "1 of 2 coupon(s) match" in result.output

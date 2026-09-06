@@ -71,11 +71,47 @@ def test_a_missing_field_is_tolerated():
 
 
 def test_tally_counts_and_orders_by_frequency():
-    assert select.tally(CATALOGUE, select.DEPARTMENTS) == {"dairy": 2, "beverages": 1, "frozen": 1}
+    assert select.tally(CATALOGUE, select.DEPARTMENTS) == {"Dairy": 2, "Beverages": 1, "Frozen": 1}
 
 
 def test_tally_of_ways_to_shop():
-    assert select.tally(CATALOGUE, select.WAYS_TO_SHOP)["in_store"] == 3
+    assert select.tally(CATALOGUE, select.WAYS_TO_SHOP)["IN_STORE"] == 3
+
+
+def test_tally_reports_krogers_spelling_not_a_folded_one():
+    """--list-filters output gets pasted back onto the command line."""
+    coupons = [coupon("a", ["Health & Beauty"]), coupon("b", ["Health & Beauty"])]
+    assert select.tally(coupons, select.DEPARTMENTS) == {"Health & Beauty": 2}
+
+
+def test_tally_merges_values_that_differ_only_in_case():
+    coupons = [coupon("a", ["Dairy"]), coupon("b", ["DAIRY"])]
+    assert select.tally(coupons, select.DEPARTMENTS) == {"Dairy": 2}
+
+
+AMPERSAND = [
+    coupon("a", ["Health & Beauty"], ["IN_STORE"]),
+    coupon("b", ["Meat & Seafood"], ["PICKUP"]),
+    coupon("c", ["Dairy"], ["IN_STORE"]),
+]
+
+
+def test_departments_with_spaces_and_ampersands_match():
+    assert ids(select.select(AMPERSAND, departments=("Health & Beauty",))) == ["a"]
+
+
+def test_such_names_match_case_insensitively_too():
+    assert ids(select.select(AMPERSAND, departments=("health & BEAUTY",))) == ["a"]
+
+
+def test_internal_spacing_is_significant():
+    """Only surrounding whitespace is trimmed; "Health &Beauty" is a different name."""
+    assert select.select(AMPERSAND, departments=("Health &Beauty",)) == []
+
+
+def test_surrounding_whitespace_is_trimmed_on_both_sides():
+    values = select.select(AMPERSAND, departments=("  Health & Beauty  ",))
+    assert ids(values) == ["a"]
 
 
 def test_a_non_list_field_is_structural_not_silently_empty():

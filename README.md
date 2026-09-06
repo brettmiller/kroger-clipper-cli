@@ -76,7 +76,15 @@ kroger-clipper clip --way-to-shop IN_STORE,PICKUP
 ```
 
 Values are comma-separated; passing an option more than once works too, and the
-two can be mixed.
+two can be mixed. Quote anything containing spaces or an `&`, since the shell
+would otherwise eat it:
+
+```sh
+kroger-clipper clip --department "Health & Beauty,Meat & Seafood"
+```
+
+`--list-filters` prints department names exactly as Kroger spells them, so its
+output can be pasted straight back.
 
 Values within one option are OR-ed (Dairy *or* Bakery); different options are
 AND-ed (in that department *and* available that way to shop). Names are matched

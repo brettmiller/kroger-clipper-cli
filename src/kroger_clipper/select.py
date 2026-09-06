@@ -34,12 +34,21 @@ def select(
 
 
 def tally(coupons: list[dict], field: str) -> dict[str, int]:
-    """How many coupons carry each value, so the vocabulary is discoverable."""
+    """How many coupons carry each value, so the vocabulary is discoverable.
+
+    Counts case-insensitively but reports Kroger's own spelling: this output is
+    meant to be copied back onto the command line, so "Health & Beauty" must not
+    come back as "health & beauty".
+    """
     counts: dict[str, int] = {}
+    labels: dict[str, str] = {}
     for coupon in coupons:
-        for value in _values(coupon, field):
-            counts[value] = counts.get(value, 0) + 1
-    return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+        for value in _raw(coupon, field):
+            key = value.casefold()
+            labels.setdefault(key, value)
+            counts[key] = counts.get(key, 0) + 1
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return {labels[key]: count for key, count in ordered}
 
 
 def _fold(values) -> set[str]:
@@ -47,7 +56,12 @@ def _fold(values) -> set[str]:
 
 
 def _values(coupon: dict, field: str) -> set[str]:
-    """The coupon's values for a field, case-folded.
+    """The coupon's values for a field, case-folded for comparison."""
+    return _fold(_raw(coupon, field))
+
+
+def _raw(coupon: dict, field: str) -> list[str]:
+    """The coupon's values as Kroger spells them, validated.
 
     Missing is fine — a coupon in no department simply matches no department
     filter. A value that is not a string is not: silently matching nothing would
@@ -63,4 +77,4 @@ def _values(coupon: dict, field: str) -> set[str]:
                 f"expected {field} to hold strings, found {type(value).__name__}. "
                 "Kroger changed the payload; filtering cannot be trusted until this is checked."
             )
-    return _fold(raw)
+    return [value.strip() for value in raw]
