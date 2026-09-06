@@ -51,6 +51,23 @@ kroger-clipper clip --json           # machine-readable summary
 kroger-clipper clip --delay 0.2 0.5  # seconds between clips (default 0.2 0.7)
 ```
 
+### Filtering
+
+Kroger's site filters by "Departments" and "Ways to shop"; both are available
+here, applied locally to the coupons already fetched:
+
+```sh
+kroger-clipper clip --list-filters              # what departments exist, with counts
+kroger-clipper clip --department Dairy          # only these (repeatable)
+kroger-clipper clip --exclude-department Beer   # skip these (repeatable)
+kroger-clipper clip --way-to-shop IN_STORE      # IN_STORE, PICKUP, DELIVERY
+```
+
+Names are matched case-insensitively. Filtering happens on this side rather than
+through the API's own `filter.category`, which answers HTTP 500 for a department
+that is not stocked at your store — a typo would fail the run instead of matching
+nothing. Pair any of these with `--dry-run` to see what would be clipped.
+
 `--banner` targets another Kroger-owned chain (`--banner frysfood.com`). Only
 `kroger.com` has actually been tested.
 

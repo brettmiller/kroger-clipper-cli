@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from . import coupons, errors, scrub, transport
+from . import coupons, errors, scrub, select, transport
 from . import session as session_mod
 
 EXIT_SESSION_EXPIRED = 2
@@ -103,6 +103,26 @@ def login(banner: str) -> None:
     "--banner", default="kroger.com", show_default=True, help="Kroger-owned banner domain."
 )
 @click.option("--dry-run", is_flag=True, help="Enumerate unclipped coupons; clip nothing.")
+@click.option(
+    "--department", "departments", multiple=True, help="Only these departments. Repeatable."
+)
+@click.option(
+    "--exclude-department",
+    "exclude_departments",
+    multiple=True,
+    help="Skip these departments. Repeatable.",
+)
+@click.option(
+    "--way-to-shop",
+    "ways_to_shop",
+    multiple=True,
+    help="Only these, e.g. IN_STORE, PICKUP, DELIVERY. Repeatable.",
+)
+@click.option(
+    "--list-filters",
+    is_flag=True,
+    help="Show the departments and ways to shop on offer, then exit.",
+)
 @click.option("--max-clips", type=int, default=None, help="Stop after this many coupons.")
 @click.option(
     "--delay",
@@ -117,6 +137,10 @@ def login(banner: str) -> None:
 def clip(
     banner: str,
     dry_run: bool,
+    departments: tuple[str, ...],
+    exclude_departments: tuple[str, ...],
+    ways_to_shop: tuple[str, ...],
+    list_filters: bool,
     max_clips: int | None,
     delay: tuple[float, float],
     as_json: bool,
@@ -132,6 +156,20 @@ def clip(
         except _Stale as again:
             click.echo(f"Still refused after signing in: {again.reason}", err=True)
             sys.exit(again.exit_code)
+
+    if list_filters:
+        _show_filters(found, as_json)
+        return
+
+    total = len(found)
+    found = select.select(
+        found,
+        departments=departments,
+        exclude_departments=exclude_departments,
+        ways_to_shop=ways_to_shop,
+    )
+    if len(found) != total and not as_json:
+        click.echo(f"{len(found)} of {total} coupon(s) match the filters.", err=True)
 
     if dry_run:
         if as_json:
@@ -243,6 +281,23 @@ def _relogin(reason: str, banner: str) -> bool:
         click.echo(f"Sign-in failed: {exc}", err=True)
         return False
     return True
+
+
+def _show_filters(found: list[dict], as_json: bool) -> None:
+    """Print the vocabulary. Guessing a department name is not a usable interface."""
+    departments = select.tally(found, select.DEPARTMENTS)
+    ways = select.tally(found, select.WAYS_TO_SHOP)
+
+    if as_json:
+        click.echo(json.dumps({"departments": departments, "waysToShop": ways}, indent=2))
+        return
+
+    click.echo(f"Departments ({len(departments)}):")
+    for name, count in departments.items():
+        click.echo(f"  {count:>4}  {name}")
+    click.echo(f"\nWays to shop ({len(ways)}):")
+    for name, count in ways.items():
+        click.echo(f"  {count:>4}  {name}")
 
 
 def _summarise(coupon: dict) -> dict:

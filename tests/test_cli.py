@@ -24,6 +24,8 @@ def fake_coupons(count=2):
             "brandName": "Acme",
             "shortDescription": f"$1 off {i}",
             "expirationDate": "2026-10-01",
+            "categories": ["Dairy"] if i % 2 == 0 else ["Frozen"],
+            "modalities": ["IN_STORE"],
         }
         for i in range(count)
     ]
@@ -323,3 +325,65 @@ def test_version_resolves_against_the_real_distribution(runner):
 
     assert result.exit_code == 0
     assert "version" in result.output
+
+
+def test_department_filter_narrows_the_dry_run(runner, no_network, monkeypatch):
+    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+
+    result = runner.invoke(cli.main, ["clip", "--dry-run", "--department", "Dairy"])
+
+    assert result.exit_code == 0
+    assert "2 unclipped coupon(s)" in result.output
+
+
+def test_excluded_department_is_dropped(runner, no_network, monkeypatch):
+    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+
+    result = runner.invoke(cli.main, ["clip", "--dry-run", "--exclude-department", "Frozen"])
+
+    assert "2 unclipped coupon(s)" in result.output
+
+
+def test_filters_apply_to_clipping_not_just_dry_run(runner, no_network, monkeypatch):
+    seen = {}
+
+    def capture(_http, _banner, items, **kwargs):
+        seen["ids"] = [c["id"] for c in items]
+        return summary()
+
+    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+    monkeypatch.setattr(coupons, "clip_all", capture)
+    runner.invoke(cli.main, ["clip", "--department", "Dairy"])
+
+    assert seen["ids"] == ["c0", "c2"]
+
+
+def test_list_filters_shows_the_vocabulary(runner, no_network, monkeypatch):
+    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+    monkeypatch.setattr(
+        coupons, "clip_all", lambda *a, **k: pytest.fail("--list-filters must not clip")
+    )
+
+    result = runner.invoke(cli.main, ["clip", "--list-filters"])
+
+    assert result.exit_code == 0
+    assert "dairy" in result.output
+    assert "in_store" in result.output
+
+
+def test_list_filters_json(runner, no_network, monkeypatch):
+    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+
+    payload = json.loads(runner.invoke(cli.main, ["clip", "--list-filters", "--json"]).output)
+
+    assert payload["departments"] == {"dairy": 2, "frozen": 2}
+    assert payload["waysToShop"] == {"in_store": 4}
+
+
+def test_a_filter_matching_nothing_clips_nothing_and_says_so(runner, no_network, monkeypatch):
+    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: fake_coupons(4))
+
+    result = runner.invoke(cli.main, ["clip", "--dry-run", "--department", "Nonexistent"])
+
+    assert result.exit_code == 0
+    assert "0 of 4 coupon(s) match" in result.output

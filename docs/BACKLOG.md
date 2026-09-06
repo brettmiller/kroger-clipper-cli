@@ -49,10 +49,12 @@ fails the suite.
   API exposes them via `filter.type=cash_back`, and `CONTEXT.md` already keeps
   them as a separate term so adding them widens scope explicitly rather than
   quietly.
-- **Category or value filtering.** Clipping everything is free and filtering by
-  value is impossible anyway — the compact projection has no numeric discount
-  field, only prose. If wanted, it is a `filter.category` parameter, not a
-  parser.
+- **Value filtering.** Impossible as things stand: the compact projection has no
+  numeric discount field, only prose. Department and way-to-shop filtering is
+  implemented; filtering by "Special savings" (`specialSavings[]`) is not, and
+  nobody has asked for it.
+- **Deny-list patterns** over brand and description text. Deferred until the
+  department filters prove insufficient.
 - **Unattended scheduling.** ADR-0002 records why authentication is interactive
   only, and what revisiting it would cost.
 - **Banners other than kroger.com.** `--banner` exists and is threaded through,
