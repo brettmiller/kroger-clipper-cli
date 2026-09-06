@@ -76,11 +76,23 @@ kroger-clipper clip --way-to-shop IN_STORE,PICKUP
 ```
 
 Values are comma-separated; passing an option more than once works too, and the
-two can be mixed. Quote anything containing spaces or an `&`, since the shell
-would otherwise eat it:
+two can be mixed.
+
+Department names contain spaces and `&`, which the shell would otherwise treat as
+a command separator. **Quote the whole comma-separated list once** — the split on
+commas happens after the shell is finished with it:
 
 ```sh
 kroger-clipper clip --department "Health & Beauty,Meat & Seafood"
+```
+
+Quoting each name separately (`"Health & Beauty","Meat & Seafood"`) also works,
+but only because the shell joins adjacent quoted strings into one word — it is
+the same single argument, not two. Repeating the option is the explicit
+alternative:
+
+```sh
+kroger-clipper clip --department "Health & Beauty" --department "Meat & Seafood"
 ```
 
 `--list-filters` prints department names exactly as Kroger spells them, so its
