@@ -37,8 +37,9 @@ fails the suite.
   real test is whenever enough coupons expire to leave room.
 - **What `clip-unclip` returns for an already-clipped or expired coupon.**
   Never observed, because `filter.status=unclipped` means we never ask.
-- **How long a session lasts.** Unknown; it determines whether weekly runs keep
-  it alive, which ADR-0002 assumes.
+- **How long a session lasts.** Under ~16 hours, measured once. This undercuts
+  ADR-0002's assumption that weekly runs would keep a session warm - in practice
+  `login` will be needed before most runs.
 - **Akamai cookie lifetime**, and therefore whether `login` will eventually need
   re-warming more often than expected.
 

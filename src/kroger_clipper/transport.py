@@ -1,4 +1,5 @@
 from curl_cffi import requests
+from curl_cffi.requests.exceptions import RequestException
 
 from . import session
 from .errors import Blocked, SessionExpired, StructuralError
@@ -16,6 +17,11 @@ _BLOCK_MARKERS = ("Too many requests", "Access Denied", "edgesuite", "cpr_chlge"
 # Observed: an unauthenticated clip returns 401 with this code. Enumeration is
 # anonymous, so this is the only place a dead session actually shows up.
 AUTH_REQUIRED_CODE = "AUTH_REQUIRED"
+
+# Akamai refuses at the TLS/HTTP-2 layer, before any HTTP status exists: curl
+# reports the stream reset instead. There is no response to inspect, so this is
+# the only evidence of a block that reaches us.
+HTTP2_STREAM_RESET = 92
 
 
 def build(banner: str) -> requests.Session:
@@ -41,6 +47,17 @@ def build(banner: str) -> requests.Session:
         }
     )
     return http
+
+
+def translate(exc: RequestException) -> Blocked:
+    """Turn a transport-level failure into something with an exit code and advice."""
+    if getattr(exc, "code", None) == HTTP2_STREAM_RESET:
+        return Blocked(
+            "Kroger's edge reset the connection before answering. That is how a "
+            "block looks. Run `kroger-clipper login` to refresh the session, and "
+            "if that also fails, wait rather than retrying"
+        )
+    return Blocked(f"could not reach Kroger: {exc}")
 
 
 def raise_for_auth(resp) -> None:

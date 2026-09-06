@@ -1,6 +1,7 @@
 import pytest
+from curl_cffi.requests.exceptions import RequestException
 
-from kroger_clipper import coupons
+from kroger_clipper import coupons, transport
 from kroger_clipper.errors import Blocked, StructuralError
 
 
@@ -101,3 +102,28 @@ def test_describe_uses_prose_because_there_is_no_numeric_value():
         {"brandName": "Acme", "shortDescription": "$1.00 off 2", "expirationDate": "2026-10-01"}
     )
     assert line == "Acme: $1.00 off 2 (expires 2026-10-01)"
+
+
+class ExplodingHttp:
+    def __init__(self, exc):
+        self._exc = exc
+
+    def get(self, url, params=None):
+        raise self._exc
+
+    def post(self, url, json=None):
+        raise self._exc
+
+
+def test_enumerate_reports_a_reset_connection_instead_of_a_traceback():
+    http = ExplodingHttp(RequestException("reset", transport.HTTP2_STREAM_RESET, None))
+
+    with pytest.raises(Blocked, match="kroger-clipper login"):
+        coupons.list_unclipped(http, "kroger.com")
+
+
+def test_clip_reports_a_reset_connection_instead_of_a_traceback():
+    http = ExplodingHttp(RequestException("reset", transport.HTTP2_STREAM_RESET, None))
+
+    with pytest.raises(Blocked, match="kroger-clipper login"):
+        coupons.clip_all(http, "kroger.com", [{"id": "c0"}], sleep=lambda _s: None)

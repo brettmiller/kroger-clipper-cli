@@ -33,15 +33,18 @@ def fetch_page(http, banner: str, offset: int = 0, size: int = PAGE_SIZE) -> dic
 
 
 def _fetch(http, url: str, offset: int, size: int = PAGE_SIZE) -> dict:
-    resp = http.get(
-        url,
-        params={
-            "projections": "coupons.compact",
-            "filter.status": "unclipped",
-            "page.size": size,
-            "page.offset": offset,
-        },
-    )
+    try:
+        resp = http.get(
+            url,
+            params={
+                "projections": "coupons.compact",
+                "filter.status": "unclipped",
+                "page.size": size,
+                "page.offset": offset,
+            },
+        )
+    except transport.RequestException as exc:
+        raise transport.translate(exc) from exc
     transport.raise_for_block(resp)
     if resp.status_code != 200:
         raise StructuralError(f"enumerate returned HTTP {resp.status_code}: {resp.text[:200]}")
@@ -171,7 +174,10 @@ def _clip_one(http, url: str, coupon, sleep) -> dict:
     payload = {"action": "CLIP", "couponId": coupon_id}
 
     for attempt in range(len(RETRY_BACKOFF_S) + 1):
-        resp = http.post(url, json=payload)
+        try:
+            resp = http.post(url, json=payload)
+        except transport.RequestException as exc:
+            raise transport.translate(exc) from exc
 
         if transport.rate_limited(resp):
             if attempt == len(RETRY_BACKOFF_S):

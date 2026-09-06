@@ -220,6 +220,19 @@ traffic shape bot detection looks for.
   HTTP 429 {"cpr_chlge":"true","t":"291758601"}
   ```
 
+## Sessions do not survive overnight
+
+A session captured at ~17:00 was refused by ~09:00 the next morning. The refusal
+arrives **below HTTP**: the TLS/HTTP-2 connection is reset, so `curl_cffi` raises
+error 92 (`HTTP/2 stream reset by server, INTERNAL_ERROR`) and there is no status
+code or body to inspect. That is the same signature a plain, non-impersonated
+client gets, which suggests the Akamai cookies (`_abck`, `bm_sz`) had aged out
+rather than the Kroger identity cookie.
+
+Practically: a stream reset means run `login` again to re-warm. It is not
+distinguishable at the client from a hard block, so the tool reports both the
+same way and advises `login` first, waiting second.
+
 ## Open questions requiring an authenticated session
 
 - Name of the actual session cookie.

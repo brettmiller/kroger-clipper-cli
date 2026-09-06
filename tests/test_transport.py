@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from curl_cffi.requests.exceptions import RequestException
 
 from kroger_clipper import session, transport
 from kroger_clipper.errors import Blocked, SessionExpired, StructuralError
@@ -101,3 +102,19 @@ def test_raise_for_block_covers_both_rate_limit_and_denial():
     with pytest.raises(Blocked, match="Akamai"):
         transport.raise_for_block(StubResponse(200, "Access Denied"))
     transport.raise_for_block(StubResponse(200, "{}"))
+
+
+def test_stream_reset_becomes_a_block_with_advice():
+    """Akamai refuses below HTTP, so curl error 92 is the only evidence of a block."""
+    exc = RequestException("stream reset", transport.HTTP2_STREAM_RESET, None)
+    blocked = transport.translate(exc)
+
+    assert "kroger-clipper login" in str(blocked)
+    assert "wait" in str(blocked)
+
+
+def test_other_transport_errors_are_reported_plainly():
+    blocked = transport.translate(RequestException("name resolution failed", 6, None))
+
+    assert "could not reach Kroger" in str(blocked)
+    assert "name resolution failed" in str(blocked)
