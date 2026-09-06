@@ -75,7 +75,15 @@ kroger-clipper clip --exclude-department Beer   # skip these (repeatable)
 kroger-clipper clip --way-to-shop IN_STORE      # IN_STORE, PICKUP, DELIVERY
 ```
 
-Names are matched case-insensitively. Filtering happens on this side rather than
+Pass an option more than once to give it several values:
+
+```sh
+kroger-clipper clip --department Dairy --department Bakery
+```
+
+Repeats within one option are OR-ed (Dairy *or* Bakery); different options are
+AND-ed (in that department *and* available that way to shop). Names are matched
+case-insensitively. Filtering happens on this side rather than
 through the API's own `filter.category`, which answers HTTP 500 for a department
 that is not stocked at your store — a typo would fail the run instead of matching
 nothing. Pair any of these with `--dry-run` to see what would be clipped.

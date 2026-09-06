@@ -115,19 +115,22 @@ def _shared_options(command):
             ),
             click.option("--dry-run", is_flag=True, help="Show what would change; change nothing."),
             click.option(
-                "--department", "departments", multiple=True, help="Only these. Repeatable."
+                "--department",
+                "departments",
+                multiple=True,
+                help="Only this department; pass the option again for more.",
             ),
             click.option(
                 "--exclude-department",
                 "exclude_departments",
                 multiple=True,
-                help="Skip these. Repeatable.",
+                help="Skip this department; pass the option again for more.",
             ),
             click.option(
                 "--way-to-shop",
                 "ways_to_shop",
                 multiple=True,
-                help="Only these, e.g. IN_STORE, PICKUP, DELIVERY. Repeatable.",
+                help="Only IN_STORE, PICKUP or DELIVERY; pass the option again for more.",
             ),
             click.option(
                 "--list-filters",
