@@ -249,7 +249,7 @@ def _run(
     # asks first. Clipping is additive and does not.
     needs_confirm = not assume_yes and not as_json
     if needs_confirm and not click.confirm(
-        f"Remove {target} coupon(s) from the card?", default=False, err=True
+        f"Remove {target} coupon(s) from the card?", default=True, err=True
     ):
         click.echo("Cancelled.", err=True)
         return

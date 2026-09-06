@@ -444,6 +444,18 @@ def test_unclip_asks_before_removing(runner, no_network, monkeypatch):
     assert "Cancelled" in result.output
 
 
+def test_unclip_prompt_defaults_to_yes(runner, no_network, monkeypatch):
+    """Pressing Enter proceeds; the prompt reads [Y/n]."""
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(3))
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: summary())
+
+    result = runner.invoke(cli.main, ["unclip"], input="\n")
+
+    assert "[Y/n]" in result.output
+    assert "Cancelled" not in result.output
+    assert result.exit_code == 0
+
+
 def test_unclip_yes_skips_the_prompt(runner, no_network, monkeypatch):
     monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(3))
     monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: summary())
