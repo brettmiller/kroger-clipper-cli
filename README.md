@@ -72,7 +72,7 @@ here, applied locally to the coupons already fetched:
 kroger-clipper clip --list-filters                    # what exists, with counts
 kroger-clipper clip --department Dairy,Bakery         # only these
 kroger-clipper clip --exclude-department Beer,Wine    # skip these
-kroger-clipper clip --way-to-shop IN_STORE,PICKUP
+kroger-clipper clip --ways-to-shop IN_STORE,PICKUP
 ```
 
 Values are comma-separated; passing an option more than once works too, and the

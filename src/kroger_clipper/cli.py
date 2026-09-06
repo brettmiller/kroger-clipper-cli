@@ -134,7 +134,7 @@ def _shared_options(command):
                 help="Skip these departments, comma-separated.",
             ),
             click.option(
-                "--way-to-shop",
+                "--ways-to-shop",
                 "ways_to_shop",
                 multiple=True,
                 callback=_csv,

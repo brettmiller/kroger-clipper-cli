@@ -546,3 +546,25 @@ def test_a_department_with_spaces_and_an_ampersand(runner, no_network, monkeypat
     result = runner.invoke(cli.main, ["clip", "--dry-run", "--department", "Health & Beauty"])
 
     assert "1 of 2 coupon(s) match" in result.output
+
+
+def test_ways_to_shop_filter(runner, no_network, monkeypatch):
+    catalogue = [
+        {"id": "a", "brandName": "X", "shortDescription": "s", "modalities": ["IN_STORE"]},
+        {"id": "b", "brandName": "Y", "shortDescription": "t", "modalities": ["DELIVERY"]},
+        {"id": "c", "brandName": "Z", "shortDescription": "u", "modalities": ["PICKUP"]},
+    ]
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: catalogue)
+
+    result = runner.invoke(cli.main, ["clip", "--dry-run", "--ways-to-shop", "IN_STORE,PICKUP"])
+
+    assert "2 of 3 coupon(s) match" in result.output
+
+
+def test_ways_to_shop_works_on_unclip_too(runner, no_network, monkeypatch):
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(2))
+    monkeypatch.setattr(coupons, "apply_all", lambda *a, **k: summary())
+
+    result = runner.invoke(cli.main, ["unclip", "--yes", "--ways-to-shop", "IN_STORE"])
+
+    assert result.exit_code == 0
