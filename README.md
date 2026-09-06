@@ -57,6 +57,11 @@ kroger-clipper clip --delay 0.2 0.5  # seconds between clips (default 0.2 0.7)
 Sign-in is required on every `login`, because Kroger's session cookies are
 discarded when the browser closes. Your password is never stored by this tool.
 
+Sessions do not last long — under about 16 hours in practice. If `clip` finds the
+session stale it offers to sign you in again and then retries, but only when
+you are at a terminal. Run unattended it exits instead, so a scheduled job never
+opens a browser nobody will see.
+
 ## What to expect
 
 - **Kroger caps a card at 250 coupons.** When the card is full, the run stops on

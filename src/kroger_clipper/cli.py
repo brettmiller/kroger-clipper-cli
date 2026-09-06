@@ -121,17 +121,15 @@ def clip(
 ) -> None:
     """Clip every unclipped digital coupon."""
     try:
-        http = transport.build(banner)
-        found = coupons.list_unclipped(http, banner)
-    except (errors.SessionMissing, errors.SessionExpired) as exc:
-        click.echo(f"{exc}. Run `kroger-clipper login`.", err=True)
-        sys.exit(EXIT_SESSION_EXPIRED)
-    except errors.Blocked as exc:
-        click.echo(f"Kroger refused the request: {exc}. Wait before retrying.", err=True)
-        sys.exit(EXIT_BLOCKED)
-    except errors.StructuralError as exc:
-        click.echo(f"The API did not look as expected: {exc}", err=True)
-        sys.exit(EXIT_STRUCTURAL)
+        http, found = _connect(banner)
+    except _Stale as stale:
+        if not _relogin(stale.reason, banner):
+            sys.exit(stale.exit_code)
+        try:
+            http, found = _connect(banner)
+        except _Stale as again:
+            click.echo(f"Still refused after signing in: {again.reason}", err=True)
+            sys.exit(again.exit_code)
 
     if dry_run:
         if as_json:
@@ -194,6 +192,55 @@ def clip(
     if result["stopped"]:
         click.echo(f"Stopped early: {result['stopped']}", err=True)
         sys.exit(EXIT_STRUCTURAL)
+
+
+class _Stale(Exception):
+    """A failure that signing in again might fix."""
+
+    def __init__(self, reason: str, exit_code: int):
+        super().__init__(reason)
+        self.reason = reason
+        self.exit_code = exit_code
+
+
+def _connect(banner: str):
+    """Build a client and enumerate, translating failures into exits or a retry."""
+    try:
+        http = transport.build(banner)
+        return http, coupons.list_unclipped(http, banner)
+    except (errors.SessionMissing, errors.SessionExpired) as exc:
+        raise _Stale(str(exc), EXIT_SESSION_EXPIRED) from exc
+    except errors.ConnectionReset as exc:
+        raise _Stale(str(exc), EXIT_BLOCKED) from exc
+    except errors.Blocked as exc:
+        # A rate limit is not fixed by signing in, and retrying makes it worse.
+        click.echo(f"Kroger refused the request: {exc}. Wait before retrying.", err=True)
+        sys.exit(EXIT_BLOCKED)
+    except errors.StructuralError as exc:
+        click.echo(f"The API did not look as expected: {exc}", err=True)
+        sys.exit(EXIT_STRUCTURAL)
+
+
+def _interactive() -> bool:
+    """Is there a human here to answer a prompt and sign in?"""
+    return sys.stdin.isatty() and sys.stderr.isatty()
+
+
+def _relogin(reason: str, banner: str) -> bool:
+    """Offer to sign in again. Never opens a browser with nobody watching."""
+    click.echo(reason, err=True)
+    if not _interactive():
+        click.echo("Run `kroger-clipper login`.", err=True)
+        return False
+    if not click.confirm("Sign in again now?", default=True, err=True):
+        return False
+
+    try:
+        session_mod.login(banner)
+    except errors.KrogerClipperError as exc:
+        click.echo(f"Sign-in failed: {exc}", err=True)
+        return False
+    return True
 
 
 def _summarise(coupon: dict) -> dict:

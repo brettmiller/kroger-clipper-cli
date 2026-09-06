@@ -204,3 +204,114 @@ def test_subcommand_help_still_works_on_its_own(runner):
     out = runner.invoke(cli.main, ["clip", "--help"]).output
     assert "--dry-run" in out
     assert "Show this message and exit." in out
+
+
+@pytest.fixture
+def interactive(monkeypatch):
+    monkeypatch.setattr(cli, "_interactive", lambda: True)
+
+
+@pytest.fixture
+def headless(monkeypatch):
+    monkeypatch.setattr(cli, "_interactive", lambda: False)
+
+
+def _fails_with(monkeypatch, exc, then=None):
+    """transport.build raises once, then optionally succeeds."""
+    calls = {"n": 0}
+
+    def build(_banner):
+        calls["n"] += 1
+        if calls["n"] == 1 or then is None:
+            raise exc
+        return object()
+
+    monkeypatch.setattr(transport, "build", build)
+    monkeypatch.setattr(coupons, "list_unclipped", lambda *_: then or [])
+    return calls
+
+
+def test_stale_session_prompts_and_retries_after_login(runner, interactive, monkeypatch):
+    logins = []
+    monkeypatch.setattr(cli.session_mod, "login", lambda b: logins.append(b))
+    monkeypatch.setattr(coupons, "clip_all", lambda *a, **k: summary())
+    _fails_with(monkeypatch, errors.SessionExpired("session rejected"), then=fake_coupons(1))
+
+    result = runner.invoke(cli.main, ["clip"], input="y\n")
+
+    assert logins == ["kroger.com"]
+    assert result.exit_code == 0
+
+
+def test_declining_the_prompt_exits_without_logging_in(runner, interactive, monkeypatch):
+    monkeypatch.setattr(
+        cli.session_mod, "login", lambda b: pytest.fail("must not sign in after a refusal")
+    )
+    _fails_with(monkeypatch, errors.SessionExpired("session rejected"))
+
+    result = runner.invoke(cli.main, ["clip"], input="n\n")
+
+    assert result.exit_code == cli.EXIT_SESSION_EXPIRED
+
+
+def test_non_interactive_never_opens_a_browser(runner, headless, monkeypatch):
+    """A cron run has nobody to sign in; prompting or launching Chrome is wrong."""
+    monkeypatch.setattr(
+        cli.session_mod, "login", lambda b: pytest.fail("must not sign in unattended")
+    )
+    _fails_with(monkeypatch, errors.SessionExpired("session rejected"))
+
+    result = runner.invoke(cli.main, ["clip"])
+
+    assert result.exit_code == cli.EXIT_SESSION_EXPIRED
+    assert "Run `kroger-clipper login`" in result.output
+
+
+def test_a_reset_connection_also_offers_login(runner, interactive, monkeypatch):
+    logins = []
+    monkeypatch.setattr(cli.session_mod, "login", lambda b: logins.append(b))
+    monkeypatch.setattr(coupons, "clip_all", lambda *a, **k: summary())
+    _fails_with(monkeypatch, errors.ConnectionReset("edge reset"), then=fake_coupons(1))
+
+    result = runner.invoke(cli.main, ["clip"], input="y\n")
+
+    assert logins == ["kroger.com"]
+    assert result.exit_code == 0
+
+
+def test_a_rate_limit_never_offers_login(runner, interactive, monkeypatch):
+    """Signing in does not fix a 429, and retrying into one makes it worse."""
+    monkeypatch.setattr(
+        cli.session_mod, "login", lambda b: pytest.fail("must not sign in on a rate limit")
+    )
+    _fails_with(monkeypatch, errors.Blocked("rate limited (HTTP 429)"))
+
+    result = runner.invoke(cli.main, ["clip"])
+
+    assert result.exit_code == cli.EXIT_BLOCKED
+    assert "Wait before retrying" in result.output
+
+
+def test_it_retries_only_once(runner, interactive, monkeypatch):
+    logins = []
+    monkeypatch.setattr(cli.session_mod, "login", lambda b: logins.append(b))
+    _fails_with(monkeypatch, errors.SessionExpired("session rejected"))
+
+    result = runner.invoke(cli.main, ["clip"], input="y\n")
+
+    assert logins == ["kroger.com"]
+    assert "Still refused after signing in" in result.output
+    assert result.exit_code == cli.EXIT_SESSION_EXPIRED
+
+
+def test_a_failed_login_does_not_loop(runner, interactive, monkeypatch):
+    def boom(_banner):
+        raise errors.ChromeNotFound("no Google Chrome found")
+
+    monkeypatch.setattr(cli.session_mod, "login", boom)
+    _fails_with(monkeypatch, errors.SessionExpired("session rejected"))
+
+    result = runner.invoke(cli.main, ["clip"], input="y\n")
+
+    assert "Sign-in failed" in result.output
+    assert result.exit_code == cli.EXIT_SESSION_EXPIRED

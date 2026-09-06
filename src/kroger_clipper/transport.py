@@ -2,7 +2,7 @@ from curl_cffi import requests
 from curl_cffi.requests.exceptions import RequestException
 
 from . import session
-from .errors import Blocked, SessionExpired, StructuralError
+from .errors import Blocked, ConnectionReset, SessionExpired, StructuralError
 
 # A stock Python TLS fingerprint is dropped at the Akamai edge before any HTTP
 # status comes back, so the client has to look like the browser we logged in
@@ -52,7 +52,7 @@ def build(banner: str) -> requests.Session:
 def translate(exc: RequestException) -> Blocked:
     """Turn a transport-level failure into something with an exit code and advice."""
     if getattr(exc, "code", None) == HTTP2_STREAM_RESET:
-        return Blocked(
+        return ConnectionReset(
             "Kroger's edge reset the connection before answering. That is how a "
             "block looks. Run `kroger-clipper login` to refresh the session, and "
             "if that also fails, wait rather than retrying"
