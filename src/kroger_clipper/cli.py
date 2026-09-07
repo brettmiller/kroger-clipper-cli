@@ -361,13 +361,12 @@ def _relogin(reason: str, banner: str) -> bool:
 def _show_filters(found: list[dict], as_json: bool) -> None:
     """Print the vocabulary. Guessing a department name is not a usable interface.
 
-    All three of Kroger's filter fields are reported, including the one that is
-    not filterable, because which UI section each field backs is unverified.
+    Special savings is shown for completeness; there is no filter for it yet.
     """
     groups = (
         ("Departments", "departments", select.DEPARTMENTS, "--department"),
         ("Ways to shop", "waysToShop", select.WAYS_TO_SHOP, "--ways-to-shop"),
-        ("Special savings", "specialSavings", select.SPECIAL_SAVINGS, "not filterable"),
+        ("Special savings", "specialSavings", select.SPECIAL_SAVINGS, "no filter"),
     )
     counted = [
         (label, key, flag, field, select.tally(found, field)) for label, key, field, flag in groups
@@ -378,7 +377,7 @@ def _show_filters(found: list[dict], as_json: bool) -> None:
         return
 
     for label, _key, flag, field, counts in counted:
-        click.echo(f"{label} ({flag}, field {field}) — {len(counts)}:")
+        click.echo(f"{label} ({flag}) — {len(counts)}:")
         for name, count in counts.items():
             click.echo(f"  {count:>4}  {name}")
         if not counts:

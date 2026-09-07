@@ -96,9 +96,9 @@ kroger-clipper clip --department "Health & Beauty" --department "Meat & Seafood"
 ```
 
 `--list-filters` prints the values exactly as Kroger spells them, so its output
-can be pasted straight back. It reports all three of Kroger's filter fields,
-including `specialSavings`, which is not filterable here — which field backs
-which section of Kroger's own filter UI has not been confirmed.
+can be pasted straight back. It also lists Special savings, which has no filter
+of its own yet. "General" is one of Kroger's real departments, not a stand-in for
+a missing value.
 
 Values within one option are OR-ed (Dairy *or* Bakery); different options are
 AND-ed (in that department *and* available that way to shop). Names are matched

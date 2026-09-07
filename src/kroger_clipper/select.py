@@ -6,7 +6,8 @@ requests; and the server answers HTTP 500 for a category that is not stocked at
 the active store, which turns a typo into a failed run.
 
 Kroger's UI calls these "Departments" and "Ways to shop"; the API calls the same
-things `categories` and `modalities`.
+things `categories` and `modalities`. "General" is a real entry in Kroger's own
+Departments list, not a placeholder.
 """
 
 from .errors import StructuralError
@@ -14,9 +15,7 @@ from .errors import StructuralError
 DEPARTMENTS = "categories"
 WAYS_TO_SHOP = "modalities"
 
-# Not filterable here, only reported. Which UI section `categories` actually
-# backs is unverified: it may be "Departments", or it may be "Special savings",
-# in which case DEPARTMENTS above is misnamed and the filter is aimed wrong.
+# Reported by --list-filters but not filterable: nobody has needed it yet.
 SPECIAL_SAVINGS = "specialSavings"
 
 

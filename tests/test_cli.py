@@ -584,7 +584,7 @@ def test_ways_to_shop_works_on_unclip_too(runner, no_network, monkeypatch):
 
 
 def test_list_filters_reports_special_savings_too(runner, no_network, monkeypatch):
-    """Which UI section backs `categories` is unverified; show all three fields."""
+    """Special savings has no filter, but seeing it is free and occasionally useful."""
     catalogue = [
         {
             "id": "a",
@@ -600,5 +600,5 @@ def test_list_filters_reports_special_savings_too(runner, no_network, monkeypatc
     result = runner.invoke(cli.main, ["clip", "--list-filters"])
 
     assert "Digital Deals" in result.output
-    assert "specialSavings" in result.output
-    assert "not filterable" in result.output
+    assert "Special savings" in result.output
+    assert "no filter" in result.output
