@@ -32,6 +32,18 @@ fails the suite.
 
 ## Unknowns needing observation
 
+- **Which UI section each filter field actually backs.** The mapping used here —
+  `modalities` = Ways to shop, `categories` = Departments, `specialSavings` =
+  Special savings — is inferred from the API's parameter names, never verified.
+  Samples show `categories: ["General"]` on most coupons, which does not look
+  like a department and suggests `categories` may back Special savings instead.
+  If so, `--department` is aimed at the wrong field and the real departments live
+  somewhere not yet found. `clip --list-filters` now reports all three fields;
+  one run against a real account settles it.
+  The authoritative answer is `meta.coupons.filterSummaryByType`, which names its
+  option groups by type. The parser drops all of `meta` except `page.hasMore`,
+  and the scrubber would need it allowlisted.
+
 - **Pacing at 0.2-0.7s is unvalidated.** The one clean full run used 0.3-1.0s.
   The card filled at 250 before the faster rate could be exercised. The first
   real test is whenever enough coupons expire to leave room.

@@ -378,6 +378,7 @@ def test_list_filters_json(runner, no_network, monkeypatch):
 
     assert payload["departments"] == {"Dairy": 2, "Frozen": 2}
     assert payload["waysToShop"] == {"IN_STORE": 4}
+    assert payload["specialSavings"] == {}
 
 
 def test_a_filter_matching_nothing_clips_nothing_and_says_so(runner, no_network, monkeypatch):
@@ -580,3 +581,24 @@ def test_ways_to_shop_works_on_unclip_too(runner, no_network, monkeypatch):
     result = runner.invoke(cli.main, ["unclip", "--yes", "--ways-to-shop", "IN_STORE"])
 
     assert result.exit_code == 0
+
+
+def test_list_filters_reports_special_savings_too(runner, no_network, monkeypatch):
+    """Which UI section backs `categories` is unverified; show all three fields."""
+    catalogue = [
+        {
+            "id": "a",
+            "brandName": "X",
+            "shortDescription": "s",
+            "categories": ["General"],
+            "modalities": ["IN_STORE"],
+            "specialSavings": ["Digital Deals"],
+        }
+    ]
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: catalogue)
+
+    result = runner.invoke(cli.main, ["clip", "--list-filters"])
+
+    assert "Digital Deals" in result.output
+    assert "specialSavings" in result.output
+    assert "not filterable" in result.output

@@ -14,6 +14,11 @@ from .errors import StructuralError
 DEPARTMENTS = "categories"
 WAYS_TO_SHOP = "modalities"
 
+# Not filterable here, only reported. Which UI section `categories` actually
+# backs is unverified: it may be "Departments", or it may be "Special savings",
+# in which case DEPARTMENTS above is misnamed and the filter is aimed wrong.
+SPECIAL_SAVINGS = "specialSavings"
+
 
 def select(
     coupons: list[dict],
