@@ -48,11 +48,14 @@ fails the suite.
 ## Known payload shapes
 
 `categories` and `modalities` are lists of plain strings. **`specialSavings` is a
-list of objects**, keys unvetted. Filtering only touches the first two and stays
-strict about them; `--list-filters` renders all three best-effort. The fixture
-scrubber refuses any non-scalar inside an allowlisted field, so capturing a real
-response will fail on `specialSavings` until someone looks at those keys and
-decides what is safe to commit.
+list of objects**, keys unvetted. Nothing reads it: there is no filter for it and
+`--list-filters` does not report it.
+
+The fixture scrubber refuses any non-scalar inside an allowlisted field, so
+`kroger-clipper capture` will fail on `specialSavings` until someone looks at
+those keys and decides what is safe to commit — or drops the field from
+`COUPON_FIELDS` entirely, which is probably the right answer given nothing uses
+it.
 
 ## Deferred by decision, not oversight
 

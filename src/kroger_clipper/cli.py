@@ -363,14 +363,10 @@ def _relogin(reason: str, banner: str) -> bool:
 
 
 def _show_filters(found: list[dict], as_json: bool) -> None:
-    """Print the vocabulary. Guessing a department name is not a usable interface.
-
-    Special savings is shown for completeness; there is no filter for it yet.
-    """
+    """Print the vocabulary. Guessing a department name is not a usable interface."""
     groups = (
         ("Departments", "departments", select.DEPARTMENTS, "--department"),
         ("Ways to shop", "waysToShop", select.WAYS_TO_SHOP, "--ways-to-shop"),
-        ("Special savings", "specialSavings", select.SPECIAL_SAVINGS, "no filter"),
     )
     counted = [
         (label, key, flag, field, select.tally(found, field)) for label, key, field, flag in groups

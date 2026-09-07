@@ -132,29 +132,7 @@ def test_unfiltered_runs_never_touch_the_fields():
     assert select.select([{"id": "x", "categories": [{"name": "Dairy"}]}]) != []
 
 
-SPECIAL_SAVINGS_OBJECTS = [
-    {"id": "a", "specialSavings": [{"name": "Digital Deals", "id": 7}]},
-    {"id": "b", "specialSavings": [{"name": "Digital Deals", "id": 7}]},
-    {"id": "c", "specialSavings": [{"displayName": "Weekly Ad"}]},
-]
-
-
-def test_tally_reads_a_label_out_of_object_values():
-    """Kroger ships specialSavings as objects, not strings."""
-    counts = select.tally(SPECIAL_SAVINGS_OBJECTS, select.SPECIAL_SAVINGS)
-    assert counts == {"Digital Deals": 2, "Weekly Ad": 1}
-
-
-def test_tally_falls_back_to_a_repr_it_cannot_label():
-    counts = select.tally([{"id": "a", "specialSavings": [{"unexpected": 1}]}], "specialSavings")
-    assert list(counts) == ["{'unexpected': 1}"]
-
-
-def test_tally_never_aborts_on_a_shape_it_does_not_know():
-    """Display is best-effort; only filtering is strict."""
-    assert select.tally([{"id": "a", "categories": "not-a-list"}], "categories") == {}
-
-
-def test_filtering_stays_strict_where_display_is_lenient():
+def test_tally_is_as_strict_as_filtering():
+    """Both read the same fields; a shape change should not be reported as normal."""
     with pytest.raises(StructuralError):
-        select.select([{"id": "a", "categories": [{"name": "Dairy"}]}], departments=("Dairy",))
+        select.tally([{"id": "a", "categories": [{"name": "Dairy"}]}], select.DEPARTMENTS)
