@@ -581,3 +581,13 @@ def test_ways_to_shop_works_on_unclip_too(runner, no_network, monkeypatch):
     result = runner.invoke(cli.main, ["unclip", "--yes", "--ways-to-shop", "IN_STORE"])
 
     assert result.exit_code == 0
+
+
+def test_list_filters_labels_the_count_column(runner, no_network, monkeypatch):
+    """A bare number next to a name does not say what it counts."""
+    monkeypatch.setattr(coupons, "list_by_status", lambda *_: fake_coupons(4))
+
+    out = runner.invoke(cli.main, ["clip", "--list-filters"]).output
+
+    assert "coupons" in out
+    assert "pass with --department" in out

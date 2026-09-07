@@ -136,3 +136,9 @@ def test_tally_is_as_strict_as_filtering():
     """Both read the same fields; a shape change should not be reported as normal."""
     with pytest.raises(StructuralError):
         select.tally([{"id": "a", "categories": [{"name": "Dairy"}]}], select.DEPARTMENTS)
+
+
+def test_a_coupon_in_two_departments_is_counted_under_both():
+    """Counts can sum to more than the number of coupons; they are not a partition."""
+    coupons = [coupon("a", ["General", "Dairy"]), coupon("b", ["General"])]
+    assert select.tally(coupons, select.DEPARTMENTS) == {"General": 2, "Dairy": 1}

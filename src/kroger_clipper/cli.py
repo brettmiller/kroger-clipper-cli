@@ -377,11 +377,13 @@ def _show_filters(found: list[dict], as_json: bool) -> None:
         return
 
     for label, _key, flag, field, counts in counted:
-        click.echo(f"{label} ({flag}) — {len(counts)}:")
-        for name, count in counts.items():
-            click.echo(f"  {count:>4}  {name}")
+        click.echo(f"{label} — {len(counts)}, pass with {flag}")
         if not counts:
             click.echo("  (none)")
+        else:
+            click.echo(f"  {'coupons':>7}  name")
+            for name, count in counts.items():
+                click.echo(f"  {count:>7}  {name}")
         click.echo()
 
 
