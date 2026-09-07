@@ -28,7 +28,8 @@ uv tool install --editable .
 
 That puts `kroger-clipper` on your `PATH` and, because the install is editable,
 it keeps running whatever is in the working tree — no reinstall after a change.
-Remove it with `uv tool uninstall kroger-clipper`.
+Remove it with `uv tool uninstall kroger-clipper-cli` — the distribution is
+`kroger-clipper-cli` even though the command it installs is `kroger-clipper`.
 
 To run it without installing anything, `uv sync` and then prefix the commands
 below with `uv run`.
@@ -56,17 +57,23 @@ kroger-clipper clip --delay 0.2 0.5  # seconds between clips (default 0.2 0.7)
 ```sh
 kroger-clipper unclip --dry-run                  # what is on the card
 kroger-clipper unclip --department Beer          # remove just those
+kroger-clipper unclip --limit 5                  # stop after 5
 kroger-clipper unclip --yes                      # skip the confirmation
 ```
 
-`unclip` takes the same filters as `clip` and asks before removing anything.
+`unclip` takes every option `clip` does — the filters below, plus `--dry-run`,
+`--delay`, `--json` and `--list-filters` — and asks before removing anything.
 Useful because the card holds only 250 coupons: what is already on it decides
 what will fit.
+
+Note the flag is `--limit` here and `--max-clips` on `clip`. Removing 250 coupons
+is 250 requests and about four minutes, so `--dry-run` or a small `--limit` is
+the cheap way to start.
 
 ### Filtering
 
 Kroger's site filters by "Departments" and "Ways to shop"; both are available
-here, applied locally to the coupons already fetched:
+here on both commands, applied locally to the coupons already fetched:
 
 ```sh
 kroger-clipper clip --list-filters                    # what exists, with counts
@@ -106,16 +113,20 @@ through the API's own `filter.category`, which answers HTTP 500 for a department
 that is not stocked at your store — a typo would fail the run instead of matching
 nothing. Pair any of these with `--dry-run` to see what would be clipped.
 
-`--banner` targets another Kroger-owned chain (`--banner frysfood.com`). Only
-`kroger.com` has actually been tested.
+### Sessions
 
 Sign-in is required on every `login`, because Kroger's session cookies are
 discarded when the browser closes. Your password is never stored by this tool.
 
-Sessions do not last long — under about 16 hours in practice. If `clip` finds the
-session stale it offers to sign you in again and then retries, but only when
-you are at a terminal. Run unattended it exits instead, so a scheduled job never
-opens a browser nobody will see.
+Sessions do not last long — under about 16 hours in practice. If `clip` or
+`unclip` finds the session stale it offers to sign you in again and then retries,
+but only when you are at a terminal. Run unattended it exits instead, so a
+scheduled job never opens a browser nobody will see.
+
+### Other banners
+
+`--banner` targets another Kroger-owned chain (`--banner frysfood.com`). Only
+`kroger.com` has actually been tested.
 
 ## What to expect
 
@@ -138,8 +149,8 @@ opens a browser nobody will see.
 | 3 | Something structural: the API did not look as expected |
 | 4 | Rate limited or blocked; wait before retrying |
 
-Note: a session that has *expired* currently exits 3 rather than 2. See
-[docs/BACKLOG.md](docs/BACKLOG.md).
+An expired session exits 2, the same as a missing one: both are fixed by signing
+in again, not by investigating the API.
 
 ## Files
 
