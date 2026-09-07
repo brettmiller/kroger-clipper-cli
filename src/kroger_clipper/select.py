@@ -47,12 +47,38 @@ def tally(coupons: list[dict], field: str) -> dict[str, int]:
     counts: dict[str, int] = {}
     labels: dict[str, str] = {}
     for coupon in coupons:
-        for value in _raw(coupon, field):
+        for value in _labels(coupon, field):
             key = value.casefold()
             labels.setdefault(key, value)
             counts[key] = counts.get(key, 0) + 1
     ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
     return {labels[key]: count for key, count in ordered}
+
+
+# Kroger is not consistent: categories and modalities are plain strings, but
+# specialSavings holds objects. Reporting is best-effort on purpose - refusing to
+# print a vocabulary because one display-only field changed shape is a worse
+# outcome than showing it imperfectly. Filtering stays strict; see _raw.
+_LABEL_KEYS = ("name", "displayName", "label", "title", "description", "value", "type")
+
+
+def _labels(coupon: dict, field: str) -> list[str]:
+    """Human-readable values for display. Tolerates shapes _raw would reject."""
+    raw = coupon.get(field) or []
+    if not isinstance(raw, list):
+        return []
+    return [label for value in raw if (label := _label(value))]
+
+
+def _label(value) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        for key in _LABEL_KEYS:
+            found = value.get(key)
+            if isinstance(found, str) and found.strip():
+                return found.strip()
+    return str(value)
 
 
 def _fold(values) -> set[str]:

@@ -83,3 +83,28 @@ def test_every_allowlisted_field_is_documented_as_safe():
         if any(t in f.lower() for t in ("household", "loyalty", "customer", "shopper", "email"))
     }
     assert suspicious == set()
+
+
+def test_nested_objects_are_refused_even_in_an_allowed_field():
+    """The allowlist covers field names; it says nothing about nested keys."""
+    payload = {**PAYLOAD, "data": {"coupons": [{**COUPON, "specialSavings": [{"name": "x"}]}]}}
+
+    with pytest.raises(scrub.UnknownField, match="not a scalar"):
+        scrub.scrub_payload(payload)
+
+
+def test_the_refusal_names_the_field_and_shows_the_value():
+    payload = {**PAYLOAD, "data": {"coupons": [{**COUPON, "specialSavings": [{"name": "x"}]}]}}
+
+    with pytest.raises(scrub.UnknownField, match="specialSavings"):
+        scrub.scrub_payload(payload)
+
+
+def test_lists_of_strings_are_still_fine():
+    payload = {**PAYLOAD, "data": {"coupons": [{**COUPON, "categories": ["Dairy", "Frozen"]}]}}
+    assert scrub.scrub_payload(payload)["data"]["coupons"][0]["categories"] == ["Dairy", "Frozen"]
+
+
+def test_scalars_and_nulls_are_fine():
+    payload = {**PAYLOAD, "data": {"coupons": [{**COUPON, "imageUrl": None, "addedToCard": True}]}}
+    assert scrub.scrub_payload(payload)["data"]["coupons"][0]["imageUrl"] is None

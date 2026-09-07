@@ -217,17 +217,21 @@ def _run(
             click.echo(f"Still refused after signing in: {again.reason}", err=True)
             sys.exit(again.exit_code)
 
-    if list_filters:
-        _show_filters(found, as_json)
-        return
+    try:
+        if list_filters:
+            _show_filters(found, as_json)
+            return
 
-    total = len(found)
-    found = select.select(
-        found,
-        departments=departments,
-        exclude_departments=exclude_departments,
-        ways_to_shop=ways_to_shop,
-    )
+        total = len(found)
+        found = select.select(
+            found,
+            departments=departments,
+            exclude_departments=exclude_departments,
+            ways_to_shop=ways_to_shop,
+        )
+    except errors.StructuralError as exc:
+        click.echo(f"The API did not look as expected: {exc}", err=True)
+        sys.exit(EXIT_STRUCTURAL)
     if len(found) != total and not as_json:
         click.echo(f"{len(found)} of {total} coupon(s) match the filters.", err=True)
 

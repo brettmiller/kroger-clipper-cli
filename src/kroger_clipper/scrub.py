@@ -66,7 +66,30 @@ def scrub_coupon(coupon: dict) -> dict:
             f"unrecognised coupon field(s): {sorted(unknown)}. "
             "Check whether they are shopper-identifying before adding them to COUPON_FIELDS."
         )
+    for name, value in coupon.items():
+        _check_shape(name, value)
     return dict(coupon)
+
+
+def _check_shape(name: str, value) -> None:
+    """The allowlist covers field names, not what is nested inside them.
+
+    specialSavings holds objects whose keys nobody has vetted. Refuse them rather
+    than copy an unexamined structure into a public repository.
+    """
+    if isinstance(value, list):
+        for item in value:
+            if not _scalar(item):
+                raise UnknownField(
+                    f"{name} contains a {type(item).__name__}, not a scalar: {item!r}. "
+                    "Vet its keys for shopper-identifying data before allowing it."
+                )
+    elif not _scalar(value):
+        raise UnknownField(f"{name} is a {type(value).__name__}, not a scalar")
+
+
+def _scalar(value) -> bool:
+    return value is None or isinstance(value, str | int | float | bool)
 
 
 def scrub_meta(meta: dict) -> dict:

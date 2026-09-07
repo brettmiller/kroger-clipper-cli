@@ -45,6 +45,15 @@ fails the suite.
 - **Akamai cookie lifetime**, and therefore whether `login` will eventually need
   re-warming more often than expected.
 
+## Known payload shapes
+
+`categories` and `modalities` are lists of plain strings. **`specialSavings` is a
+list of objects**, keys unvetted. Filtering only touches the first two and stays
+strict about them; `--list-filters` renders all three best-effort. The fixture
+scrubber refuses any non-scalar inside an allowlisted field, so capturing a real
+response will fail on `specialSavings` until someone looks at those keys and
+decides what is safe to commit.
+
 ## Deferred by decision, not oversight
 
 - **Cash-back offers.** Scope was deliberately limited to digital coupons. The
