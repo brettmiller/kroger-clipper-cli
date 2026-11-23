@@ -4,7 +4,7 @@ import time
 from . import transport
 from .errors import Blocked, StructuralError
 
-API_PATH = "/atlas/v1/savings-coupons/v1/coupons"
+API_PATH = "/atlas/v1/savings-coupons/v2/coupons"
 CLIP_PATH = "/atlas/v1/savings-coupons/v1/clip-unclip"
 PAGE_SIZE = 100
 

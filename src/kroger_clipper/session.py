@@ -36,7 +36,7 @@ CONTEXT_HEADERS = (
 # The old kroger-cli probed /accountmanagement/api/profile; it now returns 404.
 # Probe the endpoint we actually depend on instead, so a green login means something.
 PROBE_PATH = (
-    "/atlas/v1/savings-coupons/v1/coupons"
+    "/atlas/v1/savings-coupons/v2/coupons"
     "?projections=coupons.compact&filter.status=unclipped&page.size=1&page.offset=0"
 )
 

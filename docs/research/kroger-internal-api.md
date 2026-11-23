@@ -11,7 +11,7 @@ Base host is the Banner domain (`www.kroger.com`, `www.frysfood.com`,
 
 | Method + Path | Purpose | Confidence |
 | --- | --- | --- |
-| `GET /atlas/v1/savings-coupons/v1/coupons` | Enumerate coupons | Confirmed, 4 independent repos |
+| `GET /atlas/v1/savings-coupons/v2/coupons` | Enumerate coupons (v1 returns HTTP 410 as of 2026-11-23; v2 has the same params and envelope) | Observed 2026-11-23 |
 | `POST /atlas/v1/savings-coupons/v1/clip-unclip` | Clip/unclip ONE coupon | Confirmed, 2 independent repos |
 | `GET /atlas/v1/savings-coupons/v1/coupons?filter.krogerCouponNumber=…&filter.type=standard&projections=coupons.full` | Coupon detail incl. qualifying UPCs | Confirmed |
 | `POST /atlas/v1/modality/preferences?filter.restrictLafToFc=false` | Resolve current store to a LAF object | Confirmed, 2 repos |
@@ -119,7 +119,7 @@ Observed by attaching to a real signed-in browser and watching the coupons page
 issue its own call. Returned HTTP 200.
 
 ```
-GET /atlas/v1/savings-coupons/v1/coupons
+GET /atlas/v1/savings-coupons/v2/coupons
     ?projections=coupons.compact
     &filter.status=unclipped&filter.status=active
     &page.size=24&page.offset=0
